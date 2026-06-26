@@ -27,9 +27,12 @@ class ProfessorRecord(SQLModel, table=True):
     display_name: str | None = Field(default=None, max_length=255)
     open_slots: int = Field(default=0)
     students_committed: int = Field(default=0)
-    budget_context: str | None = Field(default=None)
+    budget_amount: int | None = Field(default=None)
+    funding_source: str | None = Field(default=None)
     recruiting_topics: str = Field(default="[]")
     gatekeeper_aggressiveness: float = Field(default=0.5)
+    auto_resolve_declines: bool = Field(default=True)
+    hold_when_at_capacity: bool = Field(default=True)
 
     publications: list[PublicationRecord] = Relationship(back_populates="professor")
     outreaches: list[OutreachRecord] = Relationship(back_populates="professor")

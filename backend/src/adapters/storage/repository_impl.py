@@ -99,8 +99,11 @@ def _record_to_professor(r: ProfessorRecord, pubs: list[PublicationRecord]) -> P
         capacity=Capacity(
             open_slots=r.open_slots,
             students_committed=r.students_committed,
-            budget_context=r.budget_context,
+            budget_amount=r.budget_amount,
+            funding_source=r.funding_source,
             recruiting_topics=json.loads(r.recruiting_topics),
+            auto_resolve_declines=r.auto_resolve_declines,
+            hold_when_at_capacity=r.hold_when_at_capacity,
         ),
         gatekeeper_aggressiveness=r.gatekeeper_aggressiveness,
         publications=[
@@ -188,9 +191,12 @@ class SqlProfessorRepository(ProfessorRepository):
             display_name=professor.display_name,
             open_slots=professor.capacity.open_slots,
             students_committed=professor.capacity.students_committed,
-            budget_context=professor.capacity.budget_context,
+            budget_amount=professor.capacity.budget_amount,
+            funding_source=professor.capacity.funding_source,
             recruiting_topics=json.dumps(professor.capacity.recruiting_topics),
             gatekeeper_aggressiveness=professor.gatekeeper_aggressiveness,
+            auto_resolve_declines=professor.capacity.auto_resolve_declines,
+            hold_when_at_capacity=professor.capacity.hold_when_at_capacity,
         )
         merged = await self._session.merge(record)
         await self._session.commit()

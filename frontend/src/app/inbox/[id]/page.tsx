@@ -1,0 +1,505 @@
+'use client';
+
+export const dynamic = 'force-dynamic';
+
+import React, { useEffect, useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+import { api, Outreach, Decision } from '@/lib/api';
+import { Logo, Wordmark } from '@/components/Logo';
+import { Button } from '@/components/Button';
+import { Tag } from '@/components/Tag';
+import { ArrowLeft, Check, X, AlertCircle, FileText, Send, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
+
+export default function OutreachDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const id = params?.id as string;
+
+  const [user, setUser] = useState<any>(null);
+  const [outreach, setOutreach] = useState<Outreach | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState('');
+
+  // Override Form State
+  const [showOverride, setShowOverride] = useState(false);
+  const [overrideLabel, setOverrideLabel] = useState<'invite' | 'request_more_info' | 'decline'>('invite');
+  const [overrideRationale, setOverrideRationale] = useState('');
+  const [overrideReply, setOverrideReply] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setUser(session.user);
+        setDisplayName(session.user.user_metadata?.display_name || 'Dr. Professor');
+      } else {
+        router.push('/login');
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        setUser(session.user);
+        setDisplayName(session.user.user_metadata?.display_name || 'Dr. Professor');
+      } else {
+        router.push('/login');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const loadOutreach = async () => {
+    if (!id) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.getReviewDetail(id);
+      setOutreach(data);
+      if (data.decision) {
+        setOverrideLabel(data.decision.label);
+        setOverrideRationale(data.decision.rationale || '');
+        setOverrideReply(data.decision.drafted_reply || '');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to load outreach details from the backend.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user && id) {
+      loadOutreach();
+    }
+  }, [user, id]);
+
+  const handleApprove = async () => {
+    if (!outreach) return;
+    try {
+      setSubmitting(true);
+      setError(null);
+      await api.approveDecision(outreach.id);
+      setSuccessMsg('Decision successfully approved.');
+      setTimeout(() => {
+        router.push('/inbox');
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Failed to approve decision.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOverride = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!outreach) return;
+    try {
+      setSubmitting(true);
+      setError(null);
+      const updated = await api.overrideDecision(outreach.id, {
+        label: overrideLabel,
+        rationale: overrideRationale,
+        drafted_reply: overrideReply || null,
+      });
+      setOutreach(updated);
+      setSuccessMsg('Decision override saved successfully.');
+      setShowOverride(false);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to submit override.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSignout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+          <RefreshCw size={24} className="animate-spin" style={{ color: 'var(--navy-900)' }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>Loading candidate data...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !outreach) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunken)', padding: '24px' }}>
+        <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '32px', maxWidth: '480px', width: '100%', textAlign: 'center', boxShadow: 'var(--shadow-md)' }}>
+          <AlertCircle size={40} style={{ color: 'var(--status-critical-ink)', marginBottom: '16px' }} />
+          <h2 style={{ margin: '0 0 8px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--text-strong)' }}>Failed to load candidate</h2>
+          <p style={{ margin: '0 0 24px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: '1.5' }}>{error}</p>
+          <Button variant="primary" onClick={() => loadOutreach()}>Retry connection</Button>
+          <div style={{ marginTop: '12px' }}>
+            <Link href="/inbox" style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textDecoration: 'none' }}>Back to Inbox</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!outreach) return null;
+
+  const profile = outreach.extracted_profile;
+  const claims = outreach.extracted_claims;
+  const decision = outreach.decision;
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)' }}>
+      {/* Top Header */}
+      <header style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              width: 30, height: 30, borderRadius: '7px',
+              background: '#FEFEFE',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+            }}
+          >
+            <Logo size={22} />
+          </div>
+          <Wordmark size={18} />
+          <span style={{ flex: 1 }} />
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 500 }}>
+              {displayName}
+            </span>
+            <button
+              onClick={handleSignout}
+              title="Sign out"
+              style={{
+                background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', padding: '6px', borderRadius: 'var(--radius-sm)',
+                transition: 'background var(--duration-fast)',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-muted)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main layout */}
+      <main style={{ flex: 1, maxWidth: '1200px', width: '100%', margin: '0 auto', padding: '32px 24px 80px', boxSizing: 'border-box' }}>
+        
+        {/* Back Link & Notifications */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+          <Link href="/inbox" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
+            <ArrowLeft size={16} />
+            Back to Inbox review queue
+          </Link>
+
+          {successMsg && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 'var(--radius-md)', padding: '12px 16px', color: 'var(--status-verified-ink)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
+              <Check size={18} />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {error && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 'var(--radius-md)', padding: '12px 16px', color: 'var(--status-critical-ink)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
+              <AlertCircle size={18} />
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Content split grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '32px', alignItems: 'start' }}>
+          
+          {/* LEFT COLUMN: Candidate Profile and Original Outreach */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            
+            {/* Candidate Identity Profile Card */}
+            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '28px', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                <div>
+                  <h1 style={{ margin: '0 0 4px', fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 600, color: 'var(--text-strong)' }}>
+                    {profile?.name || outreach.sender_name || 'Anonymous Applicant'}
+                  </h1>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+                    {profile?.email || outreach.sender_email}
+                  </span>
+                </div>
+                {profile?.country && (
+                  <Tag tone="default" style={{ fontSize: 'var(--text-xs)' }}>{profile.country}</Tag>
+                )}
+              </div>
+
+              {/* Badges/Credentials */}
+              {profile?.credentials && profile.credentials.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
+                  {profile.credentials.map((cred, idx) => (
+                    <span key={idx} style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', background: 'var(--navy-50)', border: '1px solid rgba(26, 54, 93, 0.1)', color: 'var(--navy-900)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', fontWeight: 500 }}>
+                      {cred}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Bio details list */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '18px' }}>
+                {profile?.interests && profile.interests.length > 0 && (
+                  <div>
+                    <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '6px' }}>RECRUITING AREAS OF INTEREST</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {profile.interests.map((interest, idx) => (
+                        <Tag key={idx} tone="accent" style={{ fontSize: '11px', padding: '2px 6px' }}>
+                          {interest}
+                        </Tag>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {profile?.funding_context && (
+                  <div>
+                    <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '2px' }}>FUNDING CONTEXT</span>
+                    <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>{profile.funding_context}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Original Outreach Email Block */}
+            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '28px', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>Outreach Communication</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+                  RECEIVED: {new Date(outreach.received_at).toLocaleString()}
+                </span>
+              </div>
+
+              {/* Email Content Body */}
+              <div
+                style={{
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: 'var(--text-sm)',
+                  color: 'var(--text-body)',
+                  lineHeight: '1.6',
+                  whiteSpace: 'pre-wrap',
+                  background: 'var(--surface-sunken)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '20px',
+                }}
+              >
+                {outreach.body}
+              </div>
+
+              {/* Attachments */}
+              {outreach.attachment_keys && outreach.attachment_keys.length > 0 && (
+                <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>ATTACHMENTS</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {outreach.attachment_keys.map((key, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--gray-50)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '6px 12px', fontSize: 'var(--text-xs)', color: 'var(--text-body)' }}>
+                        <FileText size={14} style={{ color: 'var(--text-muted)' }} />
+                        <span>{key}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: AI Debate & Action Center */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            
+            {/* Debate Claim Extraction Panel */}
+            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <Sparkles size={16} style={{ color: 'var(--navy-900)' }} />
+                <h3 style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Extracted Fact Verification</h3>
+              </div>
+
+              {claims && claims.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {claims.map((claim, idx) => {
+                    const statusIcon = claim.verified === true ? <Check size={12} /> : claim.verified === false ? <X size={12} /> : <span style={{ fontWeight: 600 }}>—</span>;
+                    const statusColor = claim.verified === true ? 'var(--status-verified-ink)' : claim.verified === false ? 'var(--status-critical-ink)' : 'var(--text-muted)';
+                    const statusBg = claim.verified === true ? 'rgba(16, 185, 129, 0.08)' : claim.verified === false ? 'rgba(239, 68, 68, 0.08)' : 'rgba(0, 0, 0, 0.04)';
+                    
+                    return (
+                      <div key={idx} style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: '12px' }}>
+                          <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: '1.4' }}>
+                            &ldquo;{claim.text}&rdquo;
+                          </p>
+                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: statusBg, color: statusColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${statusColor.replace(')', ', 0.15)')}` }}>
+                            {statusIcon}
+                          </div>
+                        </div>
+                        {claim.receipt && (
+                          <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px', fontSize: '11px', fontFamily: 'var(--font-sans)', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                            <strong>Verification note:</strong> {claim.receipt}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '24px 0', border: '1px dashed var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}>
+                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>No verification claims found.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Decision Consensus & Actions */}
+            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '28px', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              
+              <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px' }}>
+                <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '8px' }}>DEBATE RECOMMENDATION</span>
+                
+                {decision ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: decision.label === 'invite' ? 'rgba(16, 185, 129, 0.08)' : decision.label === 'request_more_info' ? 'rgba(245, 158, 11, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                      color: decision.label === 'invite' ? 'var(--status-verified-ink)' : decision.label === 'request_more_info' ? 'var(--status-triage-ink)' : 'var(--status-critical-ink)',
+                      border: `1px solid ${decision.label === 'invite' ? 'var(--status-verified-ink)' : decision.label === 'request_more_info' ? 'var(--status-triage-ink)' : 'var(--status-critical-ink)'}`.replace(')', ', 0.15)'),
+                    }}>
+                      {decision.label.replace(/_/g, ' ')}
+                    </span>
+                    {decision.overridden_by_professor && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-triage-ink)', fontWeight: 500 }}>
+                        <AlertTriangle size={14} /> Overridden by Professor
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Debate not completed.</span>
+                )}
+              </div>
+
+              {/* Rationale text */}
+              {decision?.rationale && (
+                <div>
+                  <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '6px' }}>DECISION RATIONALE</span>
+                  <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: '1.5' }}>
+                    {decision.rationale}
+                  </p>
+                </div>
+              )}
+
+              {/* Draft reply if exists */}
+              {decision?.drafted_reply && (
+                <div style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '16px' }}>
+                  <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '6px' }}>DRAFT REPLY EMAIL</span>
+                  <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--text-body)', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+                    {decision.drafted_reply}
+                  </p>
+                </div>
+              )}
+
+              {/* Action buttons (Approve / Override Trigger) */}
+              {!showOverride && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
+                  {decision && (
+                    <Button variant="primary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleApprove} disabled={submitting}>
+                      {submitting ? 'Approving...' : 'Approve Decision'}
+                    </Button>
+                  )}
+                  <Button variant="secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowOverride(true)}>
+                    Override Decision
+                  </Button>
+                </div>
+              )}
+
+              {/* Override Collapsible Form */}
+              {showOverride && (
+                <form onSubmit={handleOverride} style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <h4 style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Specify decision override</h4>
+                  
+                  {/* Label selector */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>NEW DECISION STATUS</label>
+                    <select
+                      value={overrideLabel}
+                      onChange={(e) => setOverrideLabel(e.target.value as any)}
+                      style={{
+                        padding: '10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)',
+                        background: 'var(--surface-card)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
+                        color: 'var(--text-strong)', outline: 'none',
+                      }}
+                    >
+                      <option value="invite">Invite candidate to interview</option>
+                      <option value="request_more_info">Request more details</option>
+                      <option value="decline">Decline application</option>
+                    </select>
+                  </div>
+
+                  {/* Rationale input */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>RATIONALE</label>
+                    <textarea
+                      value={overrideRationale}
+                      onChange={(e) => setOverrideRationale(e.target.value)}
+                      placeholder="Explain your decision..."
+                      required
+                      style={{
+                        minHeight: '80px', padding: '10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)',
+                        background: 'var(--surface-card)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
+                        color: 'var(--text-strong)', outline: 'none', resize: 'vertical',
+                      }}
+                    />
+                  </div>
+
+                  {/* Draft Reply edit */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>REPLY DRAFT (OPTIONAL)</label>
+                    <textarea
+                      value={overrideReply}
+                      onChange={(e) => setOverrideReply(e.target.value)}
+                      placeholder="Write your email response draft here..."
+                      style={{
+                        minHeight: '120px', padding: '10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)',
+                        background: 'var(--surface-card)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)',
+                        color: 'var(--text-strong)', outline: 'none', resize: 'vertical',
+                      }}
+                    />
+                  </div>
+
+                  {/* Action buttons */}
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                    <Button variant="primary" type="submit" style={{ flex: 1, justifyContent: 'center' }} disabled={submitting}>
+                      {submitting ? 'Saving...' : 'Submit Override'}
+                    </Button>
+                    <Button variant="secondary" type="button" onClick={() => setShowOverride(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

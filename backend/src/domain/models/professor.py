@@ -18,8 +18,11 @@ class Publication(BaseModel):
 class Capacity(BaseModel):
     open_slots: int = 0
     students_committed: int = 0
-    budget_context: str | None = None
+    budget_amount: int | None = None
+    funding_source: str | None = None
     recruiting_topics: list[str] = Field(default_factory=list)
+    auto_resolve_declines: bool = True
+    hold_when_at_capacity: bool = True
 
 
 class Professor(BaseModel):
