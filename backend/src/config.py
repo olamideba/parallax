@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     # Email intake
     INTAKE_WEBHOOK_SECRET: str = Field(default="")
 
+    # Supabase Auth
+    SUPABASE_JWT_SECRET: str = Field(default="")
+    SUPABASE_URL: str = Field(default="")
+
     @computed_field
     @property
     def REDIS_URL(self) -> str:

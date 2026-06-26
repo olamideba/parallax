@@ -1,0 +1,79 @@
+/* ============================================================
+   PARALLAX — SPACING, RADIUS, SIZING
+   4px base grid. Restrained, generous whitespace.
+   ============================================================ */
+
+:root {
+  /* Spacing scale (4px base) */
+  --space-0:  0;
+  --space-1:  0.25rem;  /* 4 */
+  --space-2:  0.5rem;   /* 8 */
+  --space-3:  0.75rem;  /* 12 */
+  --space-4:  1rem;     /* 16 */
+  --space-5:  1.25rem;  /* 20 */
+  --space-6:  1.5rem;   /* 24 */
+  --space-8:  2rem;     /* 32 */
+  --space-10: 2.5rem;   /* 40 */
+  --space-12: 3rem;     /* 48 */
+  --space-16: 4rem;     /* 64 */
+  --space-20: 5rem;     /* 80 */
+  --space-24: 6rem;     /* 96 */
+  --space-32: 8rem;     /* 128 */
+
+  /* Radii — crisp, institutional, small */
+  --radius-xs:   2px;
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   10px;
+  --radius-xl:   14px;
+  --radius-pill: 999px;
+
+  /* Border widths */
+  --border-hairline: 1px;
+  --border-medium:   1.5px;
+  --border-thick:    2px;
+
+  /* Layout */
+  --measure:        68ch;   /* reading width */
+  --container-sm:   640px;
+  --container-md:   880px;
+  --container-lg:   1120px;
+  --container-xl:   1320px;
+
+  /* Control heights */
+  --control-sm: 32px;
+  --control-md: 40px;
+  --control-lg: 48px;
+
+  /* Shadows — tinted with navy, low spread, restrained */
+  --shadow-xs: 0 1px 2px rgba(6, 21, 49, 0.06);
+  --shadow-sm: 0 1px 2px rgba(6, 21, 49, 0.06),
+               0 1px 3px rgba(6, 21, 49, 0.08);
+  --shadow-md: 0 2px 4px rgba(6, 21, 49, 0.06),
+               0 4px 12px rgba(6, 21, 49, 0.08);
+  --shadow-lg: 0 4px 8px rgba(6, 21, 49, 0.06),
+               0 12px 28px rgba(6, 21, 49, 0.12);
+  --shadow-xl: 0 8px 16px rgba(6, 21, 49, 0.08),
+               0 24px 56px rgba(6, 21, 49, 0.16);
+
+  /* Inset / focus */
+  --shadow-inset: inset 0 1px 2px rgba(6, 21, 49, 0.08);
+  --focus-shadow: 0 0 0 3px rgba(110, 122, 210, 0.35); /* periwinkle-500 @35% */
+
+  /* Motion — calm, no bounce. Functional only. */
+  --ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out:   cubic-bezier(0.45, 0, 0.55, 1);
+
+  --duration-fast:   120ms;
+  --duration-normal: 200ms;
+  --duration-slow:   320ms;
+
+  /* Z-index */
+  --z-base:    0;
+  --z-raised:  10;
+  --z-sticky:  100;
+  --z-overlay: 1000;
+  --z-modal:   1100;
+  --z-toast:   1200;
+}

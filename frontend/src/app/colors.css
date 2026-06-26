@@ -1,0 +1,137 @@
+/* ============================================================
+   PARALLAX — COLOR TOKENS
+   Anchored to three brand colors:
+     Navy       #061531  (primary dark / ink)
+     Periwinkle #A1ABE8  (primary light / accent)
+     White      #FEFEFE  (ground)
+   Flat fills only. No gradients. Derived tints/shades are kept
+   disciplined and cool-toned (all hues sit in the navy family).
+   ============================================================ */
+
+:root {
+  /* --- Brand anchors (exact) --- */
+  --navy:        #061531;
+  --periwinkle:  #A1ABE8;
+  --white:       #FEFEFE;
+
+  /* --- Navy / ink scale (dark end) --- */
+  --navy-950: #030B1D;
+  --navy-900: #061531; /* anchor */
+  --navy-800: #0C2147;
+  --navy-700: #142E5C;
+  --navy-600: #1F3D72;
+  --navy-500: #2E4E8A;
+
+  /* --- Periwinkle / accent scale --- */
+  /* Darker steps are derived for AA-legible accent text on white. */
+  --periwinkle-700: #3F4A9E; /* accent text on white (AA) */
+  --periwinkle-600: #4F5BB8; /* accent / link, strong */
+  --periwinkle-500: #6E7AD2;
+  --periwinkle-400: #A1ABE8; /* anchor */
+  --periwinkle-300: #BCC4EF;
+  --periwinkle-200: #D6DBF6;
+  --periwinkle-100: #E9ECFB;
+  --periwinkle-50:  #F4F6FD;
+
+  /* --- Cool neutral scale (navy-tinted grays) --- */
+  --gray-0:   #FEFEFE; /* = ground */
+  --gray-50:  #F7F8FB;
+  --gray-100: #EEF1F6;
+  --gray-200: #DEE3EC;
+  --gray-300: #C5CCDA;
+  --gray-400: #9BA4B8;
+  --gray-500: #6C7589;
+  --gray-600: #4B5468;
+  --gray-700: #343C4E;
+  --gray-800: #1E2536;
+  --gray-900: #0E1424;
+
+  /* ============================================================
+     FUNCTIONAL ACCENTS — not decorative.
+     (1) Agent-lane identity in the debate replay.
+     (2) Status signaling across queues and evidence.
+     Each has: base (fills/dots/UI ≥3:1), -ink (AA text on white),
+     and -bg (tint surface). Muted, harmonious, never a rainbow.
+     ============================================================ */
+
+  /* Agent lanes — four distinguishable but restrained hues */
+  --agent-1:    #4F5BB8; /* indigo — periwinkle family */
+  --agent-1-ink:#3C46A0;
+  --agent-1-bg: #ECEEFA;
+
+  --agent-2:    #2F7D72; /* muted teal */
+  --agent-2-ink:#236258;
+  --agent-2-bg: #E5F1EF;
+
+  --agent-3:    #9A6326; /* muted ochre / clay */
+  --agent-3-ink:#7E501C;
+  --agent-3-bg: #F5EDE2;
+
+  --agent-4:    #6E5B92; /* muted plum — arbitrator */
+  --agent-4-ink:#574576;
+  --agent-4-bg: #F0EDF6;
+
+  /* Status — verified / refuted / pending (+ neutral resolved) */
+  --status-verified:    #2E7D5B; /* muted green */
+  --status-verified-ink:#236247;
+  --status-verified-bg: #E4F1EB;
+
+  --status-refuted:     #B23C39; /* muted red */
+  --status-refuted-ink: #8F2F2D;
+  --status-refuted-bg:  #F8E8E7;
+
+  --status-pending:     #B07A2B; /* muted amber */
+  --status-pending-ink: #8C601F;
+  --status-pending-bg:  #F7EEDD;
+
+  /* ============================================================
+     SEMANTIC ALIASES — reference these in components, not raw scale
+     ============================================================ */
+
+  /* Surfaces (light side / default ground) */
+  --surface-ground:   var(--white);
+  --surface-raised:   var(--white);
+  --surface-card:     var(--white);
+  --surface-sunken:   var(--gray-50);
+  --surface-muted:    var(--gray-100);
+  --surface-accent:   var(--periwinkle-50);
+
+  /* Surfaces (dark side / navy ground — the "other vantage point") */
+  --surface-inverse:        var(--navy-900);
+  --surface-inverse-raised: var(--navy-800);
+  --surface-inverse-muted:  var(--navy-700);
+
+  /* Text on light */
+  --text-strong:   var(--navy-900);
+  --text-body:     var(--gray-800);
+  --text-muted:    var(--gray-500);
+  --text-subtle:   var(--gray-400);
+  --text-accent:   var(--periwinkle-700);
+  --text-inverse:  var(--white);
+  --text-on-accent:var(--navy-900); /* navy reads on periwinkle fills */
+
+  /* Text on dark (navy) surfaces */
+  --text-strong-inverse: var(--white);
+  --text-body-inverse:   var(--periwinkle-200);
+  --text-muted-inverse:  #8E9ABF;
+  --text-accent-inverse: var(--periwinkle-400);
+
+  /* Borders & dividers */
+  --border-subtle:  var(--gray-200);
+  --border-default: var(--gray-300);
+  --border-strong:  var(--gray-400);
+  --border-accent:  var(--periwinkle-400);
+  --border-inverse: var(--navy-700);
+  --divider:        var(--gray-200);
+
+  /* Interactive accent (buttons, links, focus) */
+  --accent:        var(--periwinkle-600);
+  --accent-hover:  var(--periwinkle-700);
+  --accent-soft:   var(--periwinkle-100);
+  --focus-ring:    var(--periwinkle-500);
+
+  /* Primary action = navy (institutional, confident) */
+  --action:        var(--navy-900);
+  --action-hover:  var(--navy-800);
+  --action-text:   var(--white);
+}

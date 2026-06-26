@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.adapters.auth.supabase_auth import get_professor_id_from_token
 from src.adapters.ingestion.vector_index import PgVectorStore
 from src.adapters.mcp.server import LocalMcpToolBus
 from src.adapters.qwen_cloud.runtime import QwenLLMClient
 from src.adapters.storage.database import get_session
+from src.adapters.storage.models import ProfessorRecord
 from src.adapters.storage.repository_impl import (
     SqlDebateTraceRepository,
     SqlOutreachRepository,
@@ -28,6 +31,20 @@ from src.application.use_cases.process_ingestion import ProcessIngestionUseCase
 from src.config import get_settings
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+ProfessorIdDep = Annotated[UUID, Depends(get_professor_id_from_token)]
+
+
+async def get_current_professor(
+    professor_id: ProfessorIdDep,
+    session: SessionDep,
+) -> ProfessorRecord:
+    record = await session.get(ProfessorRecord, professor_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Professor not found")
+    return record
+
+
+CurrentProfessorDep = Annotated[ProfessorRecord, Depends(get_current_professor)]
 
 
 def get_llm_client() -> LLMClient:

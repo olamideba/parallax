@@ -42,6 +42,7 @@ class Decision(BaseModel):
 
 class Outreach(BaseModel):
     id: UUID
+    professor_id: UUID
     channel: str = "email"
     sender_email: str
     sender_name: str | None = None

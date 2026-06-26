@@ -1,0 +1,714 @@
+'use client';
+
+export const dynamic = 'force-dynamic';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { Logo, Wordmark } from '@/components/Logo';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { Checkbox } from '@/components/Checkbox';
+import { Tag } from '@/components/Tag';
+import { 
+  Check, 
+  CheckCircle, 
+  AlertTriangle, 
+  Link as LinkIcon, 
+  Loader, 
+  ArrowLeft, 
+  ArrowRight, 
+  Upload, 
+  X, 
+  Plus,
+  Lock,
+  XCircle
+} from 'lucide-react';
+
+interface Paper {
+  id: number;
+  t: string;
+  v: string;
+  cites: number;
+  state: 'resolving' | 'indexed' | 'paywalled' | 'failed';
+  doi: string;
+}
+
+// ── Stepper Component ──
+interface StepperProps {
+  step: number;
+  steps: string[];
+}
+
+function Stepper({ step, steps }: StepperProps) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '36px' }}>
+      {steps.flatMap((s, i) => {
+        const state = i < step ? 'done' : i === step ? 'current' : 'todo';
+        const node = (
+          <div key={'s' + i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span
+              style={{
+                width: 26, height: 26, borderRadius: '999px', flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: 600,
+                background: state === 'done' ? 'var(--status-verified)' : state === 'current' ? 'var(--navy-900)' : 'var(--surface-muted)',
+                color: state === 'todo' ? 'var(--text-subtle)' : 'var(--white)',
+                border: state === 'current' ? '2px solid var(--periwinkle-400)' : 'none',
+              }}
+            >
+              {state === 'done' ? <Check size={14} color="var(--white)" /> : String(i + 1)}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
+                fontWeight: state === 'current' ? 600 : 500,
+                color: state === 'todo' ? 'var(--text-subtle)' : 'var(--text-strong)',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {s}
+            </span>
+          </div>
+        );
+        const conn = i < steps.length - 1 ? (
+          <div key={'c' + i} style={{ flex: 1, height: 1, background: 'var(--border-default)', margin: '0 14px', minWidth: 24 }} />
+        ) : null;
+        return conn ? [node, conn] : [node];
+      })}
+    </div>
+  );
+}
+
+// ── Resolution status pill ──
+function ResolutionPill({ state }: { state: Paper['state'] }) {
+  const configs = {
+    resolving: { label: 'Resolving…', color: 'var(--status-pending-ink)', bg: 'var(--status-pending-bg)', icon: <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> },
+    indexed:   { label: 'Indexed',    color: 'var(--status-verified-ink)', bg: 'var(--status-verified-bg)', icon: <CheckCircle size={13} /> },
+    paywalled: { label: 'Upload PDF', color: 'var(--agent-3-ink)', bg: 'var(--agent-3-bg)', icon: <Lock size={13} /> },
+    failed:    { label: 'Not found',  color: 'var(--status-refuted-ink)',  bg: 'var(--status-refuted-bg)',  icon: <XCircle size={13} /> },
+  };
+  const cfg = configs[state] || { label: state, color: 'var(--text-muted)', bg: 'var(--surface-muted)', icon: null };
+  return (
+    <div
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: '5px',
+        padding: '3px 9px', borderRadius: '999px',
+        background: cfg.bg, color: cfg.color,
+        fontFamily: 'var(--font-sans)', fontSize: '12px', fontWeight: 500,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {cfg.icon}
+      {cfg.label}
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default function OnboardingPage() {
+  const router = useRouter();
+
+  const STEPS = ['Publications', 'Lab capacity', 'Review'];
+  const [step, setStep] = useState(0);
+
+  /* — Publications state — */
+  const [doiText, setDoiText] = useState('');
+  const [orcidVal, setOrcidVal] = useState('');
+  const [orcidImported, setOrcidImported] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [papers, setPapers] = useState<Paper[]>([
+    { id: 1, t: 'Sparse-attention kernels for long sequences', v: 'ICML 2023', cites: 142, state: 'indexed', doi: '10.5555/1234' },
+    { id: 2, t: 'Implicit regularisation in attention', v: 'NeurIPS 2022', cites: 88, state: 'indexed', doi: '10.5555/5678' },
+    { id: 3, t: 'Retrieval-augmented reasoning at scale', v: 'ACL 2024', cites: 37, state: 'indexed', doi: '10.5555/9012' },
+    { id: 4, t: 'Efficient transformers: a survey', v: 'TMLR 2023', cites: 261, state: 'paywalled', doi: '10.5555/3456' },
+    { id: 5, t: 'Low-rank adaptation of large models', v: 'ICLR 2023', cites: 19, state: 'failed', doi: '10.5555/7890' },
+  ]);
+
+  /* — Lab capacity state — */
+  const [slots, setSlots] = useState(3);
+  const [committed, setCommitted] = useState(1);
+  const [fundingAmount, setFundingAmount] = useState('');
+  const [fundingSource, setFundingSource] = useState('');
+  const [areas, setAreas] = useState(['Sparse attention', 'Long-context retrieval', 'Efficient transformers']);
+  const [autoDecline, setAutoDecline] = useState(true);
+  const [holdAtCapacity, setHoldAtCapacity] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const handleOrcidImport = () => {
+    if (!orcidVal.trim()) return;
+    setResolving(true);
+    setTimeout(() => {
+      setOrcidImported(true);
+      setResolving(false);
+      // Mock import papers from ORCID
+      const orcidPapers: Paper[] = [
+        { id: Date.now() + 1, t: 'Verified Research via ORCID integration', v: 'Nature Machine Intelligence 2024', cites: 12, state: 'indexed', doi: '10.1038/s42256-024-001' },
+        { id: Date.now() + 2, t: 'Adaptive Attention Architectures', v: 'JMLR 2023', cites: 45, state: 'indexed', doi: '10.5555/orcid-2' }
+      ];
+      setPapers(prev => [...orcidPapers, ...prev]);
+    }, 1200);
+  };
+
+  const handleResolve = () => {
+    if (!doiText.trim()) return;
+    const lines = doiText.trim().split(/\n+/).filter(Boolean).slice(0, 3);
+    const newPapers: Paper[] = lines.map((line, i) => ({
+      id: Date.now() + i,
+      t: 'Resolving: ' + line.slice(0, 48) + (line.length > 48 ? '…' : ''),
+      v: '—', cites: 0, state: 'resolving', doi: line,
+    }));
+    setPapers(p => [...p, ...newPapers]);
+    setDoiText('');
+    setTimeout(() => {
+      setPapers(p => p.map(pp =>
+        pp.state === 'resolving'
+          ? { ...pp, state: 'indexed', t: 'Resolved paper from ' + pp.doi.slice(0, 30), v: '2024', cites: 0 }
+          : pp
+      ));
+    }, 1600);
+  };
+
+  const handleFinishSetup = async () => {
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Persist onboarding completeness locally for verification
+        localStorage.setItem(`onboarding_completed_${user.id}`, 'true');
+        // Cache lab settings locally
+        localStorage.setItem(`lab_slots_${user.id}`, String(slots));
+        localStorage.setItem(`lab_committed_${user.id}`, String(committed));
+        localStorage.setItem(`lab_funding_${user.id}`, fundingAmount);
+        localStorage.setItem(`lab_funding_source_${user.id}`, fundingSource);
+        localStorage.setItem(`lab_areas_${user.id}`, JSON.stringify(areas));
+      }
+      setTimeout(() => {
+        router.push('/'); // Navigate back to landing/main app
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+      setSaving(false);
+    }
+  };
+
+  /* ── helper layout wrappers ── */
+  const cardWrap = (children: React.ReactNode) => (
+    <div
+      style={{
+        background: 'var(--surface-card)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-xl)',
+        boxShadow: 'var(--shadow-md)',
+        padding: '36px 40px'
+      }}
+    >
+      {children}
+    </div>
+  );
+
+  const monoHeader = (t: string) => (
+    <div
+      style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: '10px',
+        letterSpacing: 'var(--tracking-caps)',
+        textTransform: 'uppercase',
+        color: 'var(--text-muted)',
+        marginBottom: '8px'
+      }}
+    >
+      {t}
+    </div>
+  );
+
+  const h2Title = (t: string) => (
+    <h2
+      style={{
+        margin: '0 0 6px',
+        fontFamily: 'var(--font-display)',
+        fontSize: 'var(--text-display-md)',
+        fontWeight: 600,
+        color: 'var(--text-strong)',
+        letterSpacing: '-0.015em',
+        lineHeight: 1.15
+      }}
+    >
+      {t}
+    </h2>
+  );
+
+  const subDescription = (t: string) => (
+    <p
+      style={{
+        margin: '0 0 28px',
+        fontFamily: 'var(--font-sans)',
+        fontSize: 'var(--text-md)',
+        color: 'var(--text-muted)',
+        lineHeight: 'var(--leading-relaxed)',
+        maxWidth: '60ch'
+      }}
+    >
+      {t}
+    </p>
+  );
+
+  const sectionRule = (
+    <hr style={{ border: 'none', borderTop: '1px solid var(--border-subtle)', margin: '28px 0' }} />
+  );
+
+  const indexed = papers.filter(p => p.state === 'indexed').length;
+  const needs = papers.filter(p => p.state === 'paywalled' || p.state === 'failed');
+
+  let body;
+  if (step === 0) {
+    body = cardWrap(
+      <>
+        {monoHeader('Step 1 of 3')}
+        {h2Title('Connect your published work')}
+        {subDescription('Parallax grounds every debate in your own research. Import via ORCID or paste a batch of DOIs and URLs — the system fetches full text where open-access and prompts you to upload PDFs for anything paywalled.')}
+
+        {/* ORCID row */}
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <Input
+            label="ORCID iD"
+            placeholder="0000-0002-1825-0097"
+            value={orcidVal}
+            onChange={e => setOrcidVal(e.target.value)}
+            leadingIcon={<LinkIcon size={16} style={{ color: 'var(--text-subtle)' }} />}
+            containerStyle={{ flex: 1, minWidth: '220px' }}
+          />
+          <Button
+            variant="primary"
+            onClick={handleOrcidImport}
+            disabled={resolving || !orcidVal.trim()}
+            leadingIcon={resolving ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+          >
+            {orcidImported ? 'Re-import from ORCID' : 'Import from ORCID'}
+          </Button>
+        </div>
+
+        {/* Divider */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-subtle)', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase' }}>
+            or paste manually
+          </span>
+          <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+        </div>
+
+        {/* DOI / URL textarea */}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '6px' }}>
+            DOIs or paper URLs
+          </label>
+          <textarea
+            value={doiText}
+            onChange={e => setDoiText(e.target.value)}
+            placeholder="10.1145/3534678&#10;https://arxiv.org/abs/2205.01068&#10;10.18653/v1/2023.acl-long.42&#10;…"
+            style={{
+              width: '100%', minHeight: 96, resize: 'vertical', boxSizing: 'border-box',
+              fontFamily: 'var(--font-mono)', fontSize: '12px', lineHeight: 1.6,
+              border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+              padding: '10px 12px', background: 'var(--surface-card)', color: 'var(--text-body)',
+              outline: 'none',
+            }}
+          />
+          <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '12px', color: 'var(--text-subtle)' }}>
+              One DOI or URL per line. Paywalled papers will prompt for PDF upload.
+            </span>
+            <Button variant="secondary" onClick={handleResolve} disabled={!doiText.trim()} style={{ flexShrink: 0 }}>
+              Resolve & index
+            </Button>
+          </div>
+        </div>
+
+        {/* PDF drop zone */}
+        <div
+          style={{ border: '1px dashed var(--border-default)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-muted)', marginBottom: '24px', cursor: 'pointer' }}
+        >
+          <Upload size={16} style={{ color: 'var(--text-subtle)' }} />
+          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
+            Drop PDFs here to add papers directly
+          </span>
+        </div>
+
+        {/* Paper list */}
+        {papers.length > 0 && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <CheckCircle size={15} style={{ color: 'var(--status-verified)' }} />
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--status-verified-ink)' }}>
+                {indexed} of {papers.length} papers indexed
+              </span>
+              {needs.length > 0 && (
+                <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--agent-3-ink)' }}>
+                  · {needs.length} need attention
+                </span>
+              )}
+            </div>
+            <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+              {papers.map((p, i) => (
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '14px', padding: '11px 16px',
+                    borderTop: i ? '1px solid var(--border-subtle)' : 'none',
+                    background: p.state === 'paywalled' ? 'var(--agent-3-bg)' : p.state === 'failed' ? 'var(--status-refuted-bg)' : 'transparent'
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {p.t}
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {p.v !== '—' ? `${p.v} · ${p.cites} citations` : p.doi}
+                    </div>
+                  </div>
+                  <ResolutionPill state={p.state} />
+                  {p.state === 'paywalled' && (
+                    <Button variant="ghost" style={{ padding: '4px 10px', fontSize: '12px' }}>
+                      Upload PDF
+                    </Button>
+                  )}
+                  <button
+                    onClick={() => setPapers(pp => pp.filter(x => x.id !== p.id))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', padding: '4px', display: 'flex', alignItems: 'center' }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  } else if (step === 1) {
+    body = cardWrap(
+      <>
+        {monoHeader('Step 2 of 3')}
+        {h2Title('Declare your lab capacity')}
+        {subDescription('Agents weigh every candidate against these constraints. Capacity is a hard signal, not a guess — set it accurately and update it as slots fill.')}
+
+        {/* — Student slots — */}
+        <div style={{ marginBottom: '28px' }}>
+          {monoHeader('Open student slots this cycle')}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {[0, 1, 2, 3, 4, 5].map(n => (
+              <button
+                key={n}
+                onClick={() => setSlots(n)}
+                style={{
+                  width: 48, height: 48, borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                  fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 600,
+                  border: '1px solid ' + (slots === n ? 'var(--navy-900)' : 'var(--border-default)'),
+                  background: slots === n ? 'var(--navy-900)' : 'var(--surface-card)',
+                  color: slots === n ? 'var(--white)' : 'var(--text-body)',
+                }}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* — Students already committed — */}
+        <div style={{ marginBottom: '28px' }}>
+          {monoHeader('Students already committed')}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {[0, 1, 2, 3, 4].map(n => (
+              <button
+                key={n}
+                onClick={() => setCommitted(n)}
+                style={{
+                  width: 48, height: 48, borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                  fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', fontWeight: 600,
+                  border: '1px solid ' + (committed === n ? 'var(--periwinkle-700)' : 'var(--border-default)'),
+                  background: committed === n ? 'var(--periwinkle-100)' : 'var(--surface-card)',
+                  color: committed === n ? 'var(--periwinkle-700)' : 'var(--text-body)',
+                }}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: '12px', color: 'var(--text-subtle)', margin: '8px 0 0' }}>
+            {committed > 0
+              ? `${committed} student${committed > 1 ? 's' : ''} already committed · ${Math.max(0, slots - committed)} effective open slot${Math.max(0, slots - committed) !== 1 ? 's' : ''}`
+              : 'No students committed yet'}
+          </p>
+        </div>
+
+        {sectionRule}
+
+        {/* — Funding — */}
+        <div style={{ marginBottom: '28px' }}>
+          {monoHeader('Funding capacity')}
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 14px', maxWidth: '56ch' }}>
+            Declared by you, never inferred about the applicant. Used to assess feasibility — not shown to candidates.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div>
+              <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '6px' }}>
+                Available budget
+              </label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span style={{ position: 'absolute', left: 12, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', pointerEvents: 'none' }}>
+                  $
+                </span>
+                <input
+                  type="text"
+                  value={fundingAmount}
+                  onChange={e => setFundingAmount(e.target.value)}
+                  placeholder="40,000"
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    paddingLeft: '26px', paddingRight: '12px', height: '40px',
+                    fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)',
+                    border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+                    background: 'var(--surface-card)', color: 'var(--text-body)', outline: 'none',
+                  }}
+                />
+              </div>
+              <p style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', color: 'var(--text-subtle)', margin: '5px 0 0' }}>
+                Per student per year, USD
+              </p>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '6px' }}>
+                Funding source
+              </label>
+              <select
+                value={fundingSource}
+                onChange={e => setFundingSource(e.target.value)}
+                style={{
+                  width: '100%', height: '40px', boxSizing: 'border-box',
+                  padding: '0 12px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
+                  border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+                  background: 'var(--surface-card)', color: fundingSource ? 'var(--text-body)' : 'var(--text-subtle)', outline: 'none',
+                  appearance: 'none',
+                }}
+              >
+                <option value="" disabled>Select source</option>
+                <option value="department">Department funding</option>
+                <option value="professor">Professor / grant funding</option>
+                <option value="university">University / fellowship</option>
+                <option value="mixed">Mixed sources</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {sectionRule}
+
+        {/* — Research areas — */}
+        <div style={{ marginBottom: '28px' }}>
+          {monoHeader('Projects and topics currently recruiting for')}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+            {areas.map((a, i) => (
+              <Tag
+                key={i}
+                tone="accent"
+                removable
+                onRemove={() => setAreas(areas.filter((_, j) => j !== i))}
+              >
+                {a}
+              </Tag>
+            ))}
+          </div>
+          <Input
+            placeholder="Add a topic and press Enter"
+            leadingIcon={<Plus size={16} style={{ color: 'var(--text-subtle)' }} />}
+            onKeyDown={(e) => {
+              const target = e.target as HTMLInputElement;
+              if (e.key === 'Enter' && target.value.trim()) {
+                setAreas([...areas, target.value.trim()]);
+                target.value = '';
+              }
+            }}
+          />
+        </div>
+
+        {sectionRule}
+
+        {/* — Triage preferences — */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {monoHeader('Triage preferences')}
+          <Checkbox
+            label="Auto-resolve clear declines"
+            description="When no claims verify and there is no research overlap, decline without asking you."
+            checked={autoDecline}
+            onChange={e => setAutoDecline(e.target.checked)}
+          />
+          <Checkbox
+            label="Hold candidates when at capacity"
+            description="Pause advancements automatically when all effective slots are filled."
+            checked={holdAtCapacity}
+            onChange={e => setHoldAtCapacity(e.target.checked)}
+          />
+        </div>
+      </>
+    );
+  } else {
+    const effectiveSlots = Math.max(0, slots - committed);
+    const fundingLabels: Record<string, string> = {
+      department: 'Department',
+      professor: 'Professor / grant',
+      university: 'University / fellowship',
+      mixed: 'Mixed sources'
+    };
+    const fundingLabel = fundingLabels[fundingSource] || '—';
+
+    body = cardWrap(
+      <>
+        {monoHeader('Step 3 of 3')}
+        {h2Title('Review your lab profile')}
+        {subDescription('This is the ground truth every debate is measured against. You can update it any time from your lab profile — edits re-index and apply to subsequent outreach.')}
+
+        {/* Top stat row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '16px' }}>
+          {[
+            { lbl: 'Publications indexed', val: indexed + ' of ' + papers.length },
+            { lbl: 'Effective open slots', val: effectiveSlots },
+            { lbl: 'Students committed', val: committed },
+          ].map(({ lbl, val }) => (
+            <div
+              key={lbl}
+              style={{ padding: '16px 18px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)' }}
+            >
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                {lbl}
+              </div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-display-md)', fontWeight: 600, color: 'var(--text-strong)' }}>
+                {val}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Funding row */}
+        <div style={{ padding: '16px 18px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', marginBottom: '16px', display: 'flex', gap: '32px' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '4px' }}>
+              Funding available
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-display-md)', fontWeight: 600, color: 'var(--text-strong)' }}>
+              {fundingAmount ? '$' + fundingAmount : '—'}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '4px' }}>
+              Source
+            </div>
+            <div style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-strong)', paddingTop: '4px' }}>
+              {fundingLabel}
+            </div>
+          </div>
+        </div>
+
+        {/* Research areas */}
+        <div style={{ padding: '16px 18px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', marginBottom: '16px' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}>
+            Recruiting for
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {areas.map((a, i) => (
+              <Tag key={i} tone="accent">
+                {a}
+              </Tag>
+            ))}
+          </div>
+        </div>
+
+        {/* Needs attention */}
+        {needs.length > 0 && (
+          <div
+            style={{ padding: '14px 18px', background: 'var(--agent-3-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--agent-3-bg)', display: 'flex', alignItems: 'flex-start', gap: '10px' }}
+          >
+            <AlertTriangle size={16} style={{ color: 'var(--agent-3-ink)', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--agent-3-ink)', marginBottom: '2px' }}>
+                {needs.length} paper{needs.length > 1 ? 's' : ''} could not be indexed
+              </div>
+              <div style={{ fontFamily: 'var(--font-sans)', fontSize: '12px', color: 'var(--agent-3-ink)', opacity: 0.8 }}>
+                You can upload PDFs now or return to publications to resolve them.
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)' }}>
+      {/* Top Bar Header */}
+      <header style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' }}>
+        <div style={{ maxWidth: 760, margin: '0 auto', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: 30, height: 30, borderRadius: '7px',
+              background: '#FEFEFE',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+            }}
+          >
+            <Logo size={22} />
+          </div>
+          <Wordmark size={18} />
+          <span style={{ flex: 1 }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
+            Lab setup
+          </span>
+        </div>
+      </header>
+
+      {/* Main Content container */}
+      <div style={{ flex: 1, width: '100%', maxWidth: 760, margin: '0 auto', padding: '44px 24px 80px', boxSizing: 'border-box' }}>
+        <Stepper step={step} steps={STEPS} />
+        {body}
+
+        {/* Footer Navigation */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px' }}>
+          {step > 0 ? (
+            <Button
+              variant="ghost"
+              leadingIcon={<ArrowLeft size={15} />}
+              onClick={() => setStep(step - 1)}
+              disabled={saving}
+            >
+              Back
+            </Button>
+          ) : (
+            <span />
+          )}
+
+          {step < STEPS.length - 1 ? (
+            <Button
+              variant="primary"
+              trailingIcon={<ArrowRight size={15} />}
+              onClick={() => setStep(step + 1)}
+            >
+              Continue
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              trailingIcon={saving ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <ArrowRight size={15} />}
+              onClick={handleFinishSetup}
+              disabled={saving}
+            >
+              {saving ? 'Saving...' : 'Finish setup — open inbox'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

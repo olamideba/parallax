@@ -1,0 +1,69 @@
+/* Fonts loaded via globals.css @import */
+
+/* ============================================================
+   PARALLAX — TYPOGRAPHY TOKENS
+   Spectral (serif display) · IBM Plex Sans (UI) · IBM Plex Mono (data)
+   A measured, journal-like scale. Restrained weights.
+   ============================================================ */
+
+:root {
+  /* Families */
+  --font-display: 'Spectral', Georgia, 'Times New Roman', serif;
+  --font-sans:    'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Weights */
+  --weight-light:    300;
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* ----- Type scale (1.200 minor-third, tuned) -----
+     Display steps use the serif; text/label steps use the sans. */
+  --text-display-2xl: 4.000rem; /* 64px — hero / cover */
+  --text-display-xl:  3.000rem; /* 48px */
+  --text-display-lg:  2.250rem; /* 36px */
+  --text-display-md:  1.750rem; /* 28px — section heads */
+  --text-display-sm:  1.375rem; /* 22px */
+
+  --text-xl:   1.250rem;  /* 20px */
+  --text-lg:   1.125rem;  /* 18px */
+  --text-md:   1.000rem;  /* 16px — base body */
+  --text-sm:   0.875rem;  /* 14px — UI default */
+  --text-xs:   0.8125rem; /* 13px — meta / labels */
+  --text-2xs:  0.75rem;   /* 12px — pills, captions */
+
+  /* Line heights */
+  --leading-tight:   1.15;
+  --leading-snug:    1.3;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.65;
+
+  /* Letter spacing */
+  --tracking-tight:   -0.02em;
+  --tracking-snug:    -0.01em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.02em;
+  --tracking-caps:    0.08em; /* eyebrows / overlines */
+
+  /* ----- Semantic roles ----- */
+  --role-display-font:   var(--font-display);
+  --role-display-weight: var(--weight-semibold);
+  --role-display-leading:var(--leading-tight);
+
+  --role-heading-font:   var(--font-display);
+  --role-heading-weight: var(--weight-medium);
+
+  --role-body-font:      var(--font-sans);
+  --role-body-weight:    var(--weight-regular);
+  --role-body-leading:   var(--leading-relaxed);
+
+  --role-ui-font:        var(--font-sans);
+  --role-ui-weight:      var(--weight-medium);
+
+  --role-label-font:     var(--font-sans);
+  --role-eyebrow-font:   var(--font-mono);
+
+  --role-data-font:      var(--font-mono);
+}

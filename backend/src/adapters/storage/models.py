@@ -18,9 +18,11 @@ class UUIDBase(SQLModel):
     )
 
 
-class ProfessorRecord(UUIDBase, table=True):
+class ProfessorRecord(SQLModel, table=True):
     __tablename__ = "professors"
 
+    # id comes from auth.users.id — never generated here
+    id: UUID = Field(primary_key=True, nullable=False, index=True)
     email: str = Field(unique=True, index=True, max_length=255)
     display_name: str | None = Field(default=None, max_length=255)
     open_slots: int = Field(default=0)

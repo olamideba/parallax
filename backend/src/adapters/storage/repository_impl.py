@@ -1,33 +1,180 @@
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.adapters.storage.models import (
+    DebateTraceRecord,
+    OutreachRecord,
+    ProfessorRecord,
+    PublicationRecord,
+)
 from src.application.ports.outbound.repository import (
     DebateTraceRepository,
     OutreachRepository,
     ProfessorRepository,
 )
-from src.domain.models.outreach import Outreach, TriageVerdict
-from src.domain.models.professor import Professor
-from src.domain.models.society import DebateTrace
+from src.domain.models.outreach import (
+    Decision,
+    DecisionLabel,
+    ExtractedClaim,
+    ExtractedProfile,
+    Outreach,
+    TriageVerdict,
+)
+from src.domain.models.professor import Capacity, Professor, Publication
+from src.domain.models.society import DebateTrace, DebateTurn
 
+# --- Outreach mapping ---
+
+def _record_to_outreach(r: OutreachRecord) -> Outreach:
+    decision = None
+    if r.decision_label:
+        decision = Decision(
+            label=DecisionLabel(r.decision_label),
+            rationale=r.decision_rationale or "",
+            drafted_reply=r.drafted_reply,
+            overridden_by_professor=r.overridden_by_professor,
+        )
+    return Outreach(
+        id=r.id,
+        professor_id=r.professor_id,
+        channel=r.channel,
+        sender_email=r.sender_email,
+        sender_name=r.sender_name,
+        body=r.body,
+        attachment_keys=json.loads(r.attachment_keys),
+        received_at=r.received_at,
+        triage_verdict=TriageVerdict(r.triage_verdict) if r.triage_verdict else None,
+        debate_trace_id=r.debate_trace_id,
+        extracted_profile=(
+            ExtractedProfile.model_validate_json(r.extracted_profile_json)
+            if r.extracted_profile_json
+            else None
+        ),
+        extracted_claims=(
+            [ExtractedClaim.model_validate(c) for c in json.loads(r.extracted_claims_json)]
+            if r.extracted_claims_json
+            else []
+        ),
+        decision=decision,
+    )
+
+
+def _outreach_to_record(o: Outreach) -> OutreachRecord:
+    return OutreachRecord(
+        id=o.id,
+        professor_id=o.professor_id,
+        channel=o.channel,
+        sender_email=o.sender_email,
+        sender_name=o.sender_name,
+        body=o.body,
+        attachment_keys=json.dumps(o.attachment_keys),
+        received_at=o.received_at,
+        triage_verdict=o.triage_verdict,
+        debate_trace_id=o.debate_trace_id,
+        decision_label=o.decision.label if o.decision else None,
+        decision_rationale=o.decision.rationale if o.decision else None,
+        drafted_reply=o.decision.drafted_reply if o.decision else None,
+        overridden_by_professor=o.decision.overridden_by_professor if o.decision else False,
+        extracted_profile_json=(
+            o.extracted_profile.model_dump_json() if o.extracted_profile else None
+        ),
+        extracted_claims_json=(
+            json.dumps([c.model_dump() for c in o.extracted_claims]) if o.extracted_claims else None
+        ),
+    )
+
+
+# --- Professor mapping ---
+
+def _record_to_professor(r: ProfessorRecord, pubs: list[PublicationRecord]) -> Professor:
+    return Professor(
+        id=r.id,
+        email=r.email,
+        display_name=r.display_name,
+        capacity=Capacity(
+            open_slots=r.open_slots,
+            students_committed=r.students_committed,
+            budget_context=r.budget_context,
+            recruiting_topics=json.loads(r.recruiting_topics),
+        ),
+        gatekeeper_aggressiveness=r.gatekeeper_aggressiveness,
+        publications=[
+            Publication(
+                id=p.id,
+                professor_id=p.professor_id,
+                title=p.title,
+                doi=p.doi,
+                url=p.url,
+                storage_key=p.storage_key,
+                indexed=p.indexed,
+            )
+            for p in pubs
+        ],
+    )
+
+
+# --- DebateTrace mapping ---
+
+def _record_to_trace(r: DebateTraceRecord) -> DebateTrace:
+    return DebateTrace(
+        id=r.id,
+        outreach_id=r.outreach_id,
+        professor_id=r.professor_id,
+        turns=[DebateTurn.model_validate(t) for t in json.loads(r.turns_json)],
+        round_cap=r.round_cap,
+        terminated_at_round=r.terminated_at_round,
+        started_at=r.started_at,
+        ended_at=r.ended_at,
+    )
+
+
+def _trace_to_record(t: DebateTrace) -> DebateTraceRecord:
+    return DebateTraceRecord(
+        id=t.id,
+        outreach_id=t.outreach_id,
+        professor_id=t.professor_id,
+        round_cap=t.round_cap,
+        terminated_at_round=t.terminated_at_round,
+        started_at=t.started_at,
+        ended_at=t.ended_at,
+        turns_json=json.dumps([turn.model_dump(mode="json") for turn in t.turns]),
+    )
+
+
+# --- Repository implementations ---
 
 class SqlOutreachRepository(OutreachRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     async def save(self, outreach: Outreach) -> Outreach:
-        raise NotImplementedError
+        record = _outreach_to_record(outreach)
+        merged = await self._session.merge(record)
+        await self._session.commit()
+        await self._session.refresh(merged)
+        return _record_to_outreach(merged)
 
     async def get_by_id(self, outreach_id: UUID) -> Outreach | None:
-        raise NotImplementedError
+        record = await self._session.get(OutreachRecord, outreach_id)
+        return _record_to_outreach(record) if record else None
 
     async def list_by_verdict(
         self, professor_id: UUID, verdict: TriageVerdict | None = None
     ) -> list[Outreach]:
-        raise NotImplementedError
+        stmt = (
+            select(OutreachRecord)
+            .where(OutreachRecord.professor_id == professor_id)
+            .order_by(OutreachRecord.received_at.desc())
+        )
+        if verdict is not None:
+            stmt = stmt.where(OutreachRecord.triage_verdict == verdict.value)
+        result = await self._session.exec(stmt)
+        return [_record_to_outreach(r) for r in result.all()]
 
 
 class SqlProfessorRepository(ProfessorRepository):
@@ -35,13 +182,44 @@ class SqlProfessorRepository(ProfessorRepository):
         self._session = session
 
     async def save(self, professor: Professor) -> Professor:
-        raise NotImplementedError
+        record = ProfessorRecord(
+            id=professor.id,
+            email=professor.email,
+            display_name=professor.display_name,
+            open_slots=professor.capacity.open_slots,
+            students_committed=professor.capacity.students_committed,
+            budget_context=professor.capacity.budget_context,
+            recruiting_topics=json.dumps(professor.capacity.recruiting_topics),
+            gatekeeper_aggressiveness=professor.gatekeeper_aggressiveness,
+        )
+        merged = await self._session.merge(record)
+        await self._session.commit()
+        await self._session.refresh(merged)
+        pubs = await self._get_publications(merged.id)
+        return _record_to_professor(merged, pubs)
 
     async def get_by_id(self, professor_id: UUID) -> Professor | None:
-        raise NotImplementedError
+        record = await self._session.get(ProfessorRecord, professor_id)
+        if not record:
+            return None
+        pubs = await self._get_publications(professor_id)
+        return _record_to_professor(record, pubs)
 
     async def get_by_email(self, email: str) -> Professor | None:
-        raise NotImplementedError
+        result = await self._session.exec(
+            select(ProfessorRecord).where(ProfessorRecord.email == email)
+        )
+        record = result.first()
+        if not record:
+            return None
+        pubs = await self._get_publications(record.id)
+        return _record_to_professor(record, pubs)
+
+    async def _get_publications(self, professor_id: UUID) -> list[PublicationRecord]:
+        result = await self._session.exec(
+            select(PublicationRecord).where(PublicationRecord.professor_id == professor_id)
+        )
+        return list(result.all())
 
 
 class SqlDebateTraceRepository(DebateTraceRepository):
@@ -49,7 +227,15 @@ class SqlDebateTraceRepository(DebateTraceRepository):
         self._session = session
 
     async def save(self, trace: DebateTrace) -> DebateTrace:
-        raise NotImplementedError
+        record = _trace_to_record(trace)
+        merged = await self._session.merge(record)
+        await self._session.commit()
+        await self._session.refresh(merged)
+        return _record_to_trace(merged)
 
     async def get_by_outreach_id(self, outreach_id: UUID) -> DebateTrace | None:
-        raise NotImplementedError
+        result = await self._session.exec(
+            select(DebateTraceRecord).where(DebateTraceRecord.outreach_id == outreach_id)
+        )
+        record = result.first()
+        return _record_to_trace(record) if record else None
