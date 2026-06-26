@@ -51,6 +51,19 @@ class Settings(BaseSettings):
     # Email intake
     INTAKE_WEBHOOK_SECRET: str = Field(default="")
 
+    # Intake address derivation
+    HMAC_SECRET: str = Field(default="")
+
+    # Resend (inbound / receiving)
+    RESEND_WEBHOOK_SECRET: str = Field(default="")
+    RESEND_INBOUND_DOMAIN: str = Field(default="")
+    RESEND_API_KEY: str = Field(default="")
+
+    # Brevo (outbound / sending)
+    BREVO_API_KEY: str = Field(default="")
+    BREVO_SENDER_EMAIL: str = Field(default="")
+    BREVO_SENDER_NAME: str = Field(default="Parallax")
+
     # Supabase Auth
     SUPABASE_JWT_SECRET: str = Field(default="")
     SUPABASE_URL: str = Field(default="")

@@ -25,11 +25,26 @@ export default function InboxPage() {
   const [funding, setFunding] = useState('');
 
   // Queue states
-  const [outreaches, setOutreaches] = useState<Outreach[]>([]);
-  const [activeTab, setActiveTab] = useState<'pending' | 'resolved' | 'declined'>('pending');
+  const [allOutreaches, setAllOutreaches] = useState<Outreach[]>([]);
+  const [activeTab, setActiveTab] = useState<'pending' | 'resolved' | 'declined' | 'replied'>('pending');
   const [loadingQueue, setLoadingQueue] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  const outreaches = React.useMemo(() => {
+    if (activeTab === 'pending') {
+      return allOutreaches.filter(
+        o => (o.status === 'awaiting_review' && o.decision?.label !== 'decline') || o.status === 'pending_triage'
+      );
+    } else if (activeTab === 'resolved') {
+      return allOutreaches.filter(o => o.status === 'rejected');
+    } else if (activeTab === 'declined') {
+      return allOutreaches.filter(o => o.status === 'awaiting_review' && o.decision?.label === 'decline');
+    } else if (activeTab === 'replied') {
+      return allOutreaches.filter(o => o.status === 'replied');
+    }
+    return [];
+  }, [allOutreaches, activeTab]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -66,35 +81,19 @@ export default function InboxPage() {
       setSlots(String(prof.open_slots));
       setCommitted(String(prof.students_committed));
       setAreas(prof.recruiting_topics);
-      setFunding(prof.budget_context || '');
-    } catch (err) {
-      console.warn('Could not load profile from backend, falling back to local storage:', err);
-      // Fallback
-      if (user) {
-        const savedSlots = localStorage.getItem(`lab_slots_${user.id}`) || '3';
-        const savedCommitted = localStorage.getItem(`lab_committed_${user.id}`) || '1';
-        const savedFunding = localStorage.getItem(`lab_funding_${user.id}`) || '';
-        const savedAreas = localStorage.getItem(`lab_areas_${user.id}`);
-
-        setSlots(savedSlots);
-        setCommitted(savedCommitted);
-        setFunding(savedFunding);
-        if (savedAreas) {
-          try {
-            setAreas(JSON.parse(savedAreas));
-          } catch (e) {
-            setAreas([]);
-          }
-        } else {
-          setAreas(['Sparse attention', 'Long-context retrieval', 'Efficient transformers']);
-        }
+      if (prof.budget_amount) {
+        setFunding(`$${prof.budget_amount.toLocaleString()}/yr (${prof.funding_source || 'Direct'})`);
+      } else {
+        setFunding('');
       }
+    } catch (err) {
+      console.warn('Could not load profile from backend:', err);
     } finally {
       setLoadingProfile(false);
     }
   };
 
-  // Fetch outreach queue based on active tab
+  // Fetch outreach queue
   useEffect(() => {
     if (!user) return;
 
@@ -102,29 +101,19 @@ export default function InboxPage() {
       try {
         setLoadingQueue(true);
         setApiError(null);
-        if (activeTab === 'pending') {
-          const data = await api.getReviewsQueue('promote');
-          // Filter out declines if any
-          setOutreaches(data.filter(o => o.decision?.label !== 'decline'));
-        } else if (activeTab === 'declined') {
-          const data = await api.getReviewsQueue('promote');
-          // Show only declines
-          setOutreaches(data.filter(o => o.decision?.label === 'decline'));
-        } else if (activeTab === 'resolved') {
-          const data = await api.getReviewsQueue('reject');
-          setOutreaches(data);
-        }
+        const data = await api.getReviewsQueue();
+        setAllOutreaches(data);
       } catch (err: any) {
         console.error('Failed to load queue:', err);
         setApiError(err.message || 'Failed to connect to the backend server.');
-        setOutreaches([]);
+        setAllOutreaches([]);
       } finally {
         setLoadingQueue(false);
       }
     };
 
     fetchQueue();
-  }, [user, activeTab]);
+  }, [user]);
 
   const handleSignout = async () => {
     await supabase.auth.signOut();
@@ -239,8 +228,11 @@ export default function InboxPage() {
               paddingBottom: '1px',
             }}
           >
-            {(['pending', 'resolved', 'declined'] as const).map((tab) => {
-              const label = tab === 'pending' ? 'Pending review' : tab === 'resolved' ? 'Auto-resolved' : 'Declined';
+            {(['pending', 'resolved', 'declined', 'replied'] as const).map((tab) => {
+              const label =
+                tab === 'pending' ? 'Pending review' :
+                tab === 'resolved' ? 'Auto-resolved' :
+                tab === 'declined' ? 'Declined' : 'Replied';
               const isActive = activeTab === tab;
               return (
                 <span
@@ -350,7 +342,9 @@ export default function InboxPage() {
                   ? 'All prospective student outreach items have been processed or resolved.'
                   : activeTab === 'resolved'
                   ? 'No candidates have been auto-rejected/archived by the debate agents.'
-                  : 'No candidate applications have been declined.'}
+                  : activeTab === 'declined'
+                  ? 'No candidate applications have been declined.'
+                  : 'No candidate applications have been replied to yet.'}
               </p>
             </div>
           ) : (
@@ -459,7 +453,45 @@ export default function InboxPage() {
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
-                        {item.decision && (
+                        {item.status === 'pending_triage' ? (
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              letterSpacing: '0.02em',
+                              textTransform: 'uppercase',
+                              padding: '4px 8px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'rgba(59, 130, 246, 0.08)',
+                              color: '#3B82F6',
+                              border: '1px solid rgba(59, 130, 246, 0.2)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                            }}
+                          >
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3B82F6', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
+                            Processing
+                          </span>
+                        ) : item.status === 'replied' ? (
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              letterSpacing: '0.02em',
+                              textTransform: 'uppercase',
+                              padding: '4px 8px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'rgba(16, 185, 129, 0.08)',
+                              color: 'var(--status-verified-ink)',
+                              border: '1px solid rgba(16, 185, 129, 0.2)',
+                            }}
+                          >
+                            Replied
+                          </span>
+                        ) : item.decision ? (
                           <span
                             style={{
                               fontFamily: 'var(--font-mono)',
@@ -476,7 +508,7 @@ export default function InboxPage() {
                           >
                             {item.decision.label.replace(/_/g, ' ')}
                           </span>
-                        )}
+                        ) : null}
                         <ChevronRight size={18} style={{ color: 'var(--text-muted)' }} />
                       </div>
                     </div>
@@ -532,6 +564,22 @@ export default function InboxPage() {
               >
                 <span style={{ color: 'var(--text-muted)' }}>EFFECTIVE VACANT:</span>
                 <span style={{ color: 'var(--status-verified-ink)', fontWeight: 600 }}>{effectiveSlots}</span>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  borderTop: '1px solid var(--border-subtle)',
+                  paddingTop: '8px',
+                  marginTop: '2px',
+                }}
+              >
+                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>INTAKE ADDRESS:</span>
+                <span style={{ color: 'var(--text-strong)', fontSize: '11px', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+                  {profile?.intake_email || 'Generating address...'}
+                </span>
               </div>
             </div>
 

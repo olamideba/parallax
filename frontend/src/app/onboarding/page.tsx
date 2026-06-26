@@ -2,9 +2,10 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { api, PublicationInput } from '@/lib/api';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -113,7 +114,7 @@ function ResolutionPill({ state }: { state: Paper['state'] }) {
 export default function OnboardingPage() {
   const router = useRouter();
 
-  const STEPS = ['Publications', 'Lab capacity', 'Review'];
+  const STEPS = ['Publications', 'Lab capacity', 'Email forwarding', 'Review'];
   const [step, setStep] = useState(0);
 
   /* — Publications state — */
@@ -121,13 +122,7 @@ export default function OnboardingPage() {
   const [orcidVal, setOrcidVal] = useState('');
   const [orcidImported, setOrcidImported] = useState(false);
   const [resolving, setResolving] = useState(false);
-  const [papers, setPapers] = useState<Paper[]>([
-    { id: 1, t: 'Sparse-attention kernels for long sequences', v: 'ICML 2023', cites: 142, state: 'indexed', doi: '10.5555/1234' },
-    { id: 2, t: 'Implicit regularisation in attention', v: 'NeurIPS 2022', cites: 88, state: 'indexed', doi: '10.5555/5678' },
-    { id: 3, t: 'Retrieval-augmented reasoning at scale', v: 'ACL 2024', cites: 37, state: 'indexed', doi: '10.5555/9012' },
-    { id: 4, t: 'Efficient transformers: a survey', v: 'TMLR 2023', cites: 261, state: 'paywalled', doi: '10.5555/3456' },
-    { id: 5, t: 'Low-rank adaptation of large models', v: 'ICLR 2023', cites: 19, state: 'failed', doi: '10.5555/7890' },
-  ]);
+  const [papers, setPapers] = useState<Paper[]>([]);
 
   /* — Lab capacity state — */
   const [slots, setSlots] = useState(3);
@@ -138,6 +133,96 @@ export default function OnboardingPage() {
   const [autoDecline, setAutoDecline] = useState(true);
   const [holdAtCapacity, setHoldAtCapacity] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  /* — Intake email state — */
+  const [intakeEmail, setIntakeEmail] = useState('');
+  const [testingIntake, setTestingIntake] = useState(false);
+  const [testIntakeSuccess, setTestIntakeSuccess] = useState(false);
+  const [testIntakeError, setTestIntakeError] = useState<string | null>(null);
+
+  const handleTestIntake = async () => {
+    setTestingIntake(true);
+    setTestIntakeSuccess(false);
+    setTestIntakeError(null);
+    try {
+      await api.testIntake();
+      setTestIntakeSuccess(true);
+    } catch (err: any) {
+      setTestIntakeError(err.message || 'Failed to inject test email.');
+    } finally {
+      setTestingIntake(false);
+    }
+  };
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        loadData();
+      } else {
+        router.push('/login');
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        loadData();
+      } else {
+        router.push('/login');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const loadData = async () => {
+    try {
+      const prof = await api.getProfessorProfile();
+      if (prof) {
+        setSlots(prof.open_slots);
+        setCommitted(prof.students_committed);
+        setFundingAmount(prof.budget_amount ? String(prof.budget_amount) : '');
+        setFundingSource(prof.funding_source || '');
+        setIntakeEmail(prof.intake_email || '');
+        if (prof.recruiting_topics && prof.recruiting_topics.length > 0) {
+          setAreas(prof.recruiting_topics);
+        }
+        setAutoDecline(prof.auto_resolve_declines ?? true);
+        setHoldAtCapacity(prof.hold_when_at_capacity ?? true);
+      }
+      
+      const pubs = await api.getPublications();
+      if (pubs && pubs.length > 0) {
+        setPapers(pubs.map((p, idx) => ({
+          id: idx + 1,
+          t: p.title,
+          v: '—',
+          cites: 0,
+          state: p.indexed ? 'indexed' : 'paywalled',
+          doi: p.doi || p.url || '',
+        })));
+      } else {
+        // Fallback demo papers if none saved yet
+        setPapers([
+          { id: 1, t: 'Sparse-attention kernels for long sequences', v: 'ICML 2023', cites: 142, state: 'indexed', doi: '10.5555/1234' },
+          { id: 2, t: 'Implicit regularisation in attention', v: 'NeurIPS 2022', cites: 88, state: 'indexed', doi: '10.5555/5678' },
+          { id: 3, t: 'Retrieval-augmented reasoning at scale', v: 'ACL 2024', cites: 37, state: 'indexed', doi: '10.5555/9012' },
+          { id: 4, t: 'Efficient transformers: a survey', v: 'TMLR 2023', cites: 261, state: 'paywalled', doi: '10.5555/3456' },
+          { id: 5, t: 'Low-rank adaptation of large models', v: 'ICLR 2023', cites: 19, state: 'failed', doi: '10.5555/7890' },
+        ]);
+      }
+    } catch (err) {
+      console.warn("Failed to load onboarding info from backend, falling back to defaults:", err);
+      setPapers([
+        { id: 1, t: 'Sparse-attention kernels for long sequences', v: 'ICML 2023', cites: 142, state: 'indexed', doi: '10.5555/1234' },
+        { id: 2, t: 'Implicit regularisation in attention', v: 'NeurIPS 2022', cites: 88, state: 'indexed', doi: '10.5555/5678' },
+        { id: 3, t: 'Retrieval-augmented reasoning at scale', v: 'ACL 2024', cites: 37, state: 'indexed', doi: '10.5555/9012' },
+        { id: 4, t: 'Efficient transformers: a survey', v: 'TMLR 2023', cites: 261, state: 'paywalled', doi: '10.5555/3456' },
+        { id: 5, t: 'Low-rank adaptation of large models', v: 'ICLR 2023', cites: 19, state: 'failed', doi: '10.5555/7890' },
+      ]);
+    }
+  };
 
   const handleOrcidImport = () => {
     if (!orcidVal.trim()) return;
@@ -177,19 +262,40 @@ export default function OnboardingPage() {
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      
+      // 1. Prepare publications list
+      const payloadPubs: PublicationInput[] = papers.map(p => {
+        const isUrl = p.doi?.startsWith('http://') || p.doi?.startsWith('https://');
+        return {
+          title: p.t,
+          doi: isUrl ? null : (p.doi || null),
+          url: isUrl ? p.doi : null,
+        };
+      });
+
+      // 2. Prepare profile list
+      const budgetAmountInt = parseInt(fundingAmount.replace(/,/g, '')) || null;
+      
+      const payloadProfile = {
+        open_slots: slots,
+        students_committed: committed,
+        budget_amount: budgetAmountInt,
+        funding_source: fundingSource || null,
+        recruiting_topics: areas,
+        auto_resolve_declines: autoDecline,
+        hold_when_at_capacity: holdAtCapacity,
+      };
+
+      // 3. Save sequentially to backend
+      await api.putPublications(payloadPubs);
+      await api.patchProfessorProfile(payloadProfile);
+
       if (user) {
-        // Persist onboarding completeness locally for verification
+        // Also persist onboarding completeness locally for fast routing
         localStorage.setItem(`onboarding_completed_${user.id}`, 'true');
-        // Cache lab settings locally
-        localStorage.setItem(`lab_slots_${user.id}`, String(slots));
-        localStorage.setItem(`lab_committed_${user.id}`, String(committed));
-        localStorage.setItem(`lab_funding_${user.id}`, fundingAmount);
-        localStorage.setItem(`lab_funding_source_${user.id}`, fundingSource);
-        localStorage.setItem(`lab_areas_${user.id}`, JSON.stringify(areas));
       }
-      setTimeout(() => {
-        router.push('/'); // Navigate back to landing/main app
-      }, 1000);
+
+      router.push('/inbox');
     } catch (err) {
       console.error(err);
       setSaving(false);
@@ -555,6 +661,97 @@ export default function OnboardingPage() {
         </div>
       </>
     );
+  } else if (step === 2) {
+    body = cardWrap(
+      <>
+        {monoHeader('Step 3 of 4')}
+        {h2Title('Configure email forwarding')}
+        {subDescription('Your qualifying incoming cold emails must be forwarded to Parallax so that debate agents can triage, index, and draft replies for your review.')}
+
+        {/* Copyable intake address */}
+        <div style={{ marginBottom: '28px' }}>
+          <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '8px' }}>
+            Your unique Parallax intake address
+          </label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="text"
+              readOnly
+              value={intakeEmail || 'Generating address...'}
+              style={{
+                flex: 1, height: '40px', boxSizing: 'border-box',
+                padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)',
+                border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+                background: 'var(--surface-sunken)', color: 'var(--text-strong)', outline: 'none',
+              }}
+            />
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (intakeEmail) {
+                  navigator.clipboard.writeText(intakeEmail);
+                  alert('Intake email copied to clipboard!');
+                }
+              }}
+              disabled={!intakeEmail}
+            >
+              Copy
+            </Button>
+          </div>
+        </div>
+
+        {sectionRule}
+
+        {/* Instructions */}
+        <div style={{ marginBottom: '28px' }}>
+          {monoHeader('Setting up the forwarding rule')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>
+            <div>
+              <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--text-strong)' }}>Gmail / Google Workspace</strong>
+              <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                Go to Settings → Filters and Blocked Addresses → Create a new filter. Set search term to look for keywords like <code>"PhD student"</code> or <code>"prospective student"</code>, and define the action to forward copy to your intake address.
+              </p>
+            </div>
+            <div>
+              <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--text-strong)' }}>Outlook / Office 365</strong>
+              <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                Go to Rules → Add new rule. Define a rule that forwards messages containing academic recruitment keywords directly to your unique intake address.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {sectionRule}
+
+        {/* Test button */}
+        <div>
+          {monoHeader('Verify the pipeline')}
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: '1.4' }}>
+            Before setting up real forwarding in your client, you can send a synthetic test email. It will run through the complete triage, claim verification, and debate sequence, and show up in your queue.
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <Button
+              variant="secondary"
+              onClick={handleTestIntake}
+              disabled={testingIntake || !intakeEmail}
+              leadingIcon={testingIntake ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+            >
+              {testingIntake ? 'Sending test email...' : 'Send test email'}
+            </Button>
+            {testIntakeSuccess && (
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-verified-ink)', fontWeight: 500 }}>
+                ✓ Synthetic email injected. It will appear in your inbox queue shortly!
+              </span>
+            )}
+            {testIntakeError && (
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-critical-ink)', fontWeight: 500 }}>
+                ⚠ {testIntakeError}
+              </span>
+            )}
+          </div>
+        </div>
+      </>
+    );
   } else {
     const effectiveSlots = Math.max(0, slots - committed);
     const fundingLabels: Record<string, string> = {
@@ -567,7 +764,7 @@ export default function OnboardingPage() {
 
     body = cardWrap(
       <>
-        {monoHeader('Step 3 of 3')}
+        {monoHeader('Step 4 of 4')}
         {h2Title('Review your lab profile')}
         {subDescription('This is the ground truth every debate is measured against. You can update it any time from your lab profile — edits re-index and apply to subsequent outreach.')}
 
@@ -590,6 +787,16 @@ export default function OnboardingPage() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Intake address */}
+        <div style={{ padding: '16px 18px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', marginBottom: '16px' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '4px' }}>
+            Intake address
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>
+            {intakeEmail || '—'}
+          </div>
         </div>
 
         {/* Funding row */}

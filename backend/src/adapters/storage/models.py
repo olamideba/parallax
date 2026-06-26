@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column
+from sqlalchemy import Column, DateTime
 from sqlmodel import Field, Relationship, SQLModel
 from uuid6 import uuid7
 
@@ -25,6 +24,7 @@ class ProfessorRecord(SQLModel, table=True):
     id: UUID = Field(primary_key=True, nullable=False, index=True)
     email: str = Field(unique=True, index=True, max_length=255)
     display_name: str | None = Field(default=None, max_length=255)
+    intake_email: str | None = Field(default=None, unique=True, index=True, max_length=320)
     open_slots: int = Field(default=0)
     students_committed: int = Field(default=0)
     budget_amount: int | None = Field(default=None)
@@ -34,8 +34,8 @@ class ProfessorRecord(SQLModel, table=True):
     auto_resolve_declines: bool = Field(default=True)
     hold_when_at_capacity: bool = Field(default=True)
 
-    publications: list[PublicationRecord] = Relationship(back_populates="professor")
-    outreaches: list[OutreachRecord] = Relationship(back_populates="professor")
+    publications: list["PublicationRecord"] = Relationship(back_populates="professor")
+    outreaches: list["OutreachRecord"] = Relationship(back_populates="professor")
 
 
 class PublicationRecord(UUIDBase, table=True):
@@ -48,8 +48,8 @@ class PublicationRecord(UUIDBase, table=True):
     storage_key: str | None = Field(default=None)
     indexed: bool = Field(default=False)
 
-    professor: ProfessorRecord | None = Relationship(back_populates="publications")
-    chunks: list[PublicationChunkRecord] = Relationship(back_populates="publication")
+    professor: Optional["ProfessorRecord"] = Relationship(back_populates="publications")
+    chunks: list["PublicationChunkRecord"] = Relationship(back_populates="publication")
 
 
 class PublicationChunkRecord(UUIDBase, table=True):
@@ -60,7 +60,7 @@ class PublicationChunkRecord(UUIDBase, table=True):
     chunk_text: str
     embedding: list[float] | None = Field(default=None, sa_column=Column(Vector(1536)))
 
-    publication: PublicationRecord | None = Relationship(back_populates="chunks")
+    publication: Optional["PublicationRecord"] = Relationship(back_populates="chunks")
 
 
 class OutreachRecord(UUIDBase, table=True):
@@ -70,9 +70,15 @@ class OutreachRecord(UUIDBase, table=True):
     channel: str = Field(default="email", max_length=50)
     sender_email: str = Field(max_length=255, index=True)
     sender_name: str | None = Field(default=None, max_length=255)
+    subject: str | None = Field(default=None)
     body: str
+    body_html: str | None = Field(default=None)
     attachment_keys: str = Field(default="[]")
-    received_at: datetime
+    received_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    status: str = Field(default="pending_triage", max_length=30, index=True)
+    replied_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
     triage_verdict: str | None = Field(default=None, max_length=20)
     debate_trace_id: UUID | None = Field(default=None, index=True)
     decision_label: str | None = Field(default=None, max_length=30)
@@ -82,7 +88,7 @@ class OutreachRecord(UUIDBase, table=True):
     extracted_profile_json: str | None = Field(default=None)
     extracted_claims_json: str | None = Field(default=None)
 
-    professor: ProfessorRecord | None = Relationship(back_populates="outreaches")
+    professor: Optional["ProfessorRecord"] = Relationship(back_populates="outreaches")
 
 
 class DebateTraceRecord(UUIDBase, table=True):
@@ -92,6 +98,8 @@ class DebateTraceRecord(UUIDBase, table=True):
     professor_id: UUID = Field(foreign_key="professors.id", index=True)
     round_cap: int
     terminated_at_round: int | None = Field(default=None)
-    started_at: datetime
-    ended_at: datetime | None = Field(default=None)
+    started_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    ended_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
     turns_json: str = Field(default="[]")

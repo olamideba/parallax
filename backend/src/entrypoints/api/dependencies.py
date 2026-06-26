@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
 
@@ -8,6 +7,8 @@ from fastapi import Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.adapters.auth.supabase_auth import get_professor_id_from_token
+from src.adapters.email.brevo_sender import BrevoEmailSender
+from src.adapters.email.resend_receiver import ResendInboundGateway
 from src.adapters.ingestion.vector_index import PgVectorStore
 from src.adapters.mcp.server import LocalMcpToolBus
 from src.adapters.qwen_cloud.runtime import QwenLLMClient
@@ -18,6 +19,7 @@ from src.adapters.storage.repository_impl import (
     SqlOutreachRepository,
     SqlProfessorRepository,
 )
+from src.application.ports.outbound.email import EmailSender, InboundEmailGateway
 from src.application.ports.outbound.llm_client import LLMClient
 from src.application.ports.outbound.mcp_tool_bus import McpToolBus
 from src.application.ports.outbound.repository import (
@@ -27,6 +29,7 @@ from src.application.ports.outbound.repository import (
 )
 from src.application.ports.outbound.vector_store import VectorStore
 from src.application.use_cases.evaluate_candidate import EvaluateCandidateUseCase
+from src.application.use_cases.process_inbound_email import ProcessInboundEmailUseCase
 from src.application.use_cases.process_ingestion import ProcessIngestionUseCase
 from src.config import get_settings
 
@@ -69,6 +72,21 @@ def get_trace_repo(session: SessionDep) -> DebateTraceRepository:
 
 def get_vector_store(session: SessionDep) -> VectorStore:
     return PgVectorStore(session)
+
+
+def get_email_sender() -> EmailSender:
+    return BrevoEmailSender()
+
+
+def get_inbound_gateway() -> InboundEmailGateway:
+    return ResendInboundGateway()
+
+
+def get_process_inbound_email_use_case(
+    outreach_repo: Annotated[OutreachRepository, Depends(get_outreach_repo)],
+    professor_repo: Annotated[ProfessorRepository, Depends(get_professor_repo)],
+) -> ProcessInboundEmailUseCase:
+    return ProcessInboundEmailUseCase(outreach_repo, professor_repo)
 
 
 def get_process_ingestion_use_case(

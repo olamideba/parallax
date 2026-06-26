@@ -37,6 +37,10 @@ class ProfessorRepository(ABC):
     async def get_by_email(self, email: str) -> Professor | None:
         raise NotImplementedError
 
+    @abstractmethod
+    async def get_by_intake_email(self, intake_email: str) -> Professor | None:
+        raise NotImplementedError
+
 
 class DebateTraceRepository(ABC):
     @abstractmethod

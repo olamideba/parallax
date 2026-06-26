@@ -7,6 +7,13 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class OutreachStatus(StrEnum):
+    PENDING_TRIAGE = "pending_triage"
+    REJECTED = "rejected"
+    AWAITING_REVIEW = "awaiting_review"
+    REPLIED = "replied"
+
+
 class TriageVerdict(StrEnum):
     REJECT = "reject"
     PROMOTE = "promote"
@@ -46,9 +53,13 @@ class Outreach(BaseModel):
     channel: str = "email"
     sender_email: str
     sender_name: str | None = None
+    subject: str | None = None
     body: str
+    body_html: str | None = None
     attachment_keys: list[str] = Field(default_factory=list)
     received_at: datetime
+    status: OutreachStatus = OutreachStatus.PENDING_TRIAGE
+    replied_at: datetime | None = None
 
     extracted_profile: ExtractedProfile | None = None
     extracted_claims: list[ExtractedClaim] = Field(default_factory=list)

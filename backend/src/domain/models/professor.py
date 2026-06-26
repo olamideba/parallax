@@ -29,6 +29,7 @@ class Professor(BaseModel):
     id: UUID
     email: str
     display_name: str | None = None
+    intake_email: str | None = None
     capacity: Capacity = Field(default_factory=Capacity)
     publications: list[Publication] = Field(default_factory=list)
     gatekeeper_aggressiveness: float = Field(default=0.5, ge=0.0, le=1.0)

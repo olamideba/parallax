@@ -36,7 +36,9 @@ export interface Outreach {
   channel: string;
   sender_email: string;
   sender_name: string | null;
+  subject: string | null;
   body: string;
+  body_html: string | null;
   attachment_keys: string[];
   received_at: string;
   extracted_profile: ExtractedProfile | null;
@@ -44,17 +46,39 @@ export interface Outreach {
   triage_verdict: 'reject' | 'promote' | null;
   debate_trace_id: string | null;
   decision: Decision | null;
+  status: 'pending_triage' | 'rejected' | 'awaiting_review' | 'replied';
+  replied_at: string | null;
 }
 
 export interface ProfessorProfile {
   id: string;
   email: string;
   display_name: string;
+  intake_email: string;
   open_slots: number;
   students_committed: number;
-  budget_context: string;
+  effective_open_slots: number;
+  budget_amount: number | null;
+  funding_source: string | null;
   recruiting_topics: string[];
   gatekeeper_aggressiveness: number;
+  auto_resolve_declines: boolean;
+  hold_when_at_capacity: boolean;
+}
+
+export interface Publication {
+  id: string;
+  title: string;
+  doi: string | null;
+  url: string | null;
+  indexed: boolean;
+  storage_key: string | null;
+}
+
+export interface PublicationInput {
+  title: string;
+  doi: string | null;
+  url: string | null;
 }
 
 async function getAuthHeaders(): Promise<HeadersInit> {
@@ -103,6 +127,20 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
 export const api = {
   getProfessorProfile: () => apiFetch<ProfessorProfile>('/professors/me'),
   
+  patchProfessorProfile: (payload: Partial<Omit<ProfessorProfile, 'id' | 'email' | 'effective_open_slots'>>) => 
+    apiFetch<ProfessorProfile>('/professors/me', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  getPublications: () => apiFetch<Publication[]>('/professors/me/publications'),
+
+  putPublications: (payload: PublicationInput[]) => 
+    apiFetch<Publication[]>('/professors/me/publications', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  
   getReviewsQueue: (verdict?: 'promote' | 'reject') => {
     const query = verdict ? `?verdict=${verdict}` : '';
     return apiFetch<Outreach[]>(`/reviews/queue${query}`);
@@ -121,5 +159,14 @@ export const api = {
   }) => apiFetch<Outreach>(`/reviews/${id}/override`, {
     method: 'POST',
     body: JSON.stringify(payload),
+  }),
+
+  testIntake: () => apiFetch<{ outreach_id: string; intake_email: string }>('/professors/me/intake/test', {
+    method: 'POST',
+  }),
+
+  sendReply: (id: string, body: string) => apiFetch<Outreach>(`/reviews/${id}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
   }),
 };

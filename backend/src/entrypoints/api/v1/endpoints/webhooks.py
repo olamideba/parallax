@@ -1,57 +1,47 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import json
 from typing import Annotated
-from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel
-from uuid6 import uuid7
+from fastapi import APIRouter, Depends, Request, Response, status
+from loguru import logger
 
-from src.application.ports.outbound.repository import OutreachRepository
-from src.domain.models.outreach import Outreach
-from src.entrypoints.api.dependencies import get_outreach_repo
-from src.entrypoints.api.schemas import GlobalResponse
+from src.application.ports.outbound.email import InboundEmailGateway
+from src.application.use_cases.process_inbound_email import ProcessInboundEmailUseCase
+from src.entrypoints.api.dependencies import (
+    get_inbound_gateway,
+    get_process_inbound_email_use_case,
+)
 from src.entrypoints.workers.intake_consumer import triage_and_ingest
-from src.config import get_settings
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
-OutreachRepoDep = Annotated[OutreachRepository, Depends(get_outreach_repo)]
+GatewayDep = Annotated[InboundEmailGateway, Depends(get_inbound_gateway)]
+InboundUseCaseDep = Annotated[
+    ProcessInboundEmailUseCase, Depends(get_process_inbound_email_use_case)
+]
 
 
-class InboundEmailPayload(BaseModel):
-    professor_id: UUID
-    sender_email: str
-    sender_name: str | None = None
-    body: str
-    attachment_keys: list[str] = []
-    received_at: datetime | None = None
+@router.post("/email/inbound")
+async def email_inbound(
+    request: Request,
+    gateway: GatewayDep,
+    use_case: InboundUseCaseDep,
+) -> Response:
+    """Resend inbound webhook (email.received). Always returns 2xx so Resend
+    does not retry on application-level discards (unknown recipient, etc.)."""
+    raw = await request.body()
+    if not gateway.verify_signature(raw, request.headers):
+        # Bad signature — reject so a forged caller gets a clear error.
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
 
+    payload = json.loads(raw)
+    inbound = gateway.parse(payload)
+    outreach = await use_case.execute(inbound)
+    if outreach is None:
+        # Unknown intake address — discard but ack so Resend stops retrying.
+        return Response(status_code=status.HTTP_200_OK)
 
-@router.post("/email-intake", response_model=GlobalResponse[dict], status_code=status.HTTP_202_ACCEPTED)
-async def email_intake(
-    payload: InboundEmailPayload,
-    outreach_repo: OutreachRepoDep,
-    x_intake_secret: Annotated[str | None, Header(alias="X-Intake-Secret")] = None,
-) -> GlobalResponse:
-    settings = get_settings()
-    if settings.INTAKE_WEBHOOK_SECRET and x_intake_secret != settings.INTAKE_WEBHOOK_SECRET:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid webhook secret")
-
-    outreach = Outreach(
-        id=uuid7(),
-        professor_id=payload.professor_id,
-        channel="email",
-        sender_email=payload.sender_email,
-        sender_name=payload.sender_name,
-        body=payload.body,
-        attachment_keys=payload.attachment_keys,
-        received_at=payload.received_at or datetime.now(timezone.utc),
-    )
-    saved = await outreach_repo.save(outreach)
-    triage_and_ingest.delay(str(saved.id), str(saved.professor_id))
-    return GlobalResponse(
-        data={"outreach_id": str(saved.id)},
-        message="Intake queued for processing",
-    )
+    triage_and_ingest.delay(str(outreach.id), str(outreach.professor_id))
+    logger.info("Inbound outreach {} queued for triage", outreach.id)
+    return Response(status_code=status.HTTP_200_OK)

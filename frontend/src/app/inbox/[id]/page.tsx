@@ -31,6 +31,10 @@ export default function OutreachDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Reply Composer State
+  const [replyBody, setReplyBody] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
@@ -66,6 +70,10 @@ export default function OutreachDetailPage() {
         setOverrideLabel(data.decision.label);
         setOverrideRationale(data.decision.rationale || '');
         setOverrideReply(data.decision.drafted_reply || '');
+        // Pre-fill reply composer with the AI draft (only if not already replied)
+        if (data.status !== 'replied') {
+          setReplyBody(data.decision.drafted_reply || '');
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -117,6 +125,22 @@ export default function OutreachDetailPage() {
       setError(err.message || 'Failed to submit override.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSendReply = async () => {
+    if (!outreach || !replyBody.trim()) return;
+    try {
+      setSendingReply(true);
+      setError(null);
+      const updated = await api.sendReply(outreach.id, replyBody);
+      setOutreach(updated);
+      setSuccessMsg('Reply sent successfully via Brevo.');
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reply.');
+    } finally {
+      setSendingReply(false);
     }
   };
 
@@ -407,22 +431,82 @@ export default function OutreachDetailPage() {
                 </div>
               )}
 
-              {/* Draft reply if exists */}
-              {decision?.drafted_reply && (
-                <div style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '16px' }}>
-                  <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '6px' }}>DRAFT REPLY EMAIL</span>
-                  <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--text-body)', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
-                    {decision.drafted_reply}
-                  </p>
+              {/* Status-aware: Pending Triage notice */}
+              {outreach.status === 'pending_triage' && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  background: 'rgba(245, 158, 11, 0.06)', border: '1px solid rgba(245, 158, 11, 0.2)',
+                  borderRadius: 'var(--radius-md)', padding: '12px 14px',
+                  fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-triage-ink)',
+                }}>
+                  <RefreshCw size={14} className="animate-spin" />
+                  <span>This outreach is being processed by the AI pipeline. Actions will be available once triage is complete.</span>
                 </div>
               )}
 
-              {/* Action buttons (Approve / Override Trigger) */}
-              {!showOverride && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
+              {/* Status-aware: Replied banner */}
+              {outreach.status === 'replied' && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  background: 'rgba(16, 185, 129, 0.06)', border: '1px solid rgba(16, 185, 129, 0.2)',
+                  borderRadius: 'var(--radius-md)', padding: '12px 14px',
+                  fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-verified-ink)',
+                }}>
+                  <Check size={14} />
+                  <span>
+                    Reply sent{outreach.replied_at ? ` on ${new Date(outreach.replied_at).toLocaleString()}` : ''}. No further action needed.
+                  </span>
+                </div>
+              )}
+
+              {/* Reply Composer */}
+              {outreach.status !== 'pending_triage' && outreach.status !== 'rejected' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                    {outreach.status === 'replied' ? 'SENT REPLY' : 'REPLY DRAFT'}
+                  </label>
+                  <textarea
+                    value={outreach.status === 'replied' ? (decision?.drafted_reply || replyBody) : replyBody}
+                    onChange={(e) => {
+                      if (outreach.status !== 'replied') setReplyBody(e.target.value);
+                    }}
+                    readOnly={outreach.status === 'replied'}
+                    placeholder="Edit the reply draft before sending..."
+                    style={{
+                      minHeight: '140px',
+                      padding: '12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-subtle)',
+                      background: outreach.status === 'replied' ? 'var(--surface-sunken)' : 'var(--surface-card)',
+                      fontFamily: 'var(--font-sans)',
+                      fontSize: 'var(--text-xs)',
+                      color: outreach.status === 'replied' ? 'var(--text-muted)' : 'var(--text-strong)',
+                      outline: 'none',
+                      resize: 'vertical',
+                      lineHeight: '1.5',
+                      cursor: outreach.status === 'replied' ? 'default' : 'text',
+                    }}
+                  />
+                  {outreach.status !== 'replied' && (
+                    <Button
+                      variant="primary"
+                      style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }}
+                      onClick={handleSendReply}
+                      disabled={sendingReply || !replyBody.trim()}
+                    >
+                      <Send size={14} />
+                      {sendingReply ? 'Sending...' : 'Send Reply via Brevo'}
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Action buttons (Approve / Override Trigger) — hidden when replied or pending */}
+              {outreach.status === 'awaiting_review' && !showOverride && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
                   {decision && (
-                    <Button variant="primary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleApprove} disabled={submitting}>
-                      {submitting ? 'Approving...' : 'Approve Decision'}
+                    <Button variant="secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleApprove} disabled={submitting}>
+                      {submitting ? 'Approving...' : 'Approve Decision (no reply)'}
                     </Button>
                   )}
                   <Button variant="secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowOverride(true)}>

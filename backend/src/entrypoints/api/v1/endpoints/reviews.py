@@ -1,25 +1,36 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
+from src.application.ports.outbound.email import EmailSender
 from src.application.ports.outbound.repository import OutreachRepository
-from src.domain.models.outreach import DecisionLabel, Decision, TriageVerdict
-from src.entrypoints.api.dependencies import CurrentProfessorDep, get_outreach_repo
+from src.domain.models.outreach import Decision, DecisionLabel, OutreachStatus, TriageVerdict
+from src.entrypoints.api.dependencies import (
+    CurrentProfessorDep,
+    get_email_sender,
+    get_outreach_repo,
+)
 from src.entrypoints.api.schemas import GlobalResponse
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
 
 OutreachRepoDep = Annotated[OutreachRepository, Depends(get_outreach_repo)]
+EmailSenderDep = Annotated[EmailSender, Depends(get_email_sender)]
 
 
 class OverrideRequest(BaseModel):
     label: DecisionLabel
     rationale: str | None = None
     drafted_reply: str | None = None
+
+
+class ReplyRequest(BaseModel):
+    body: str
 
 
 @router.get("/queue", response_model=GlobalResponse[list])
@@ -82,3 +93,29 @@ async def override_decision(
     )
     saved = await outreach_repo.save(outreach)
     return GlobalResponse(data=saved.model_dump(mode="json"), message="Decision overridden")
+
+
+@router.post("/{outreach_id}/reply", response_model=GlobalResponse[dict])
+async def send_reply(
+    outreach_id: UUID,
+    body: ReplyRequest,
+    current_professor: CurrentProfessorDep,
+    outreach_repo: OutreachRepoDep,
+    email_sender: EmailSenderDep,
+) -> GlobalResponse:
+    outreach = await outreach_repo.get_by_id(outreach_id)
+    if not outreach or outreach.professor_id != current_professor.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
+
+    subject = outreach.subject or "your message"
+    await email_sender.send_reply(
+        to_email=outreach.sender_email,
+        reply_to_email=current_professor.email,  # professor's real .edu
+        subject=f"Re: {subject}",
+        body_text=body.body,
+    )
+
+    outreach.status = OutreachStatus.REPLIED
+    outreach.replied_at = datetime.now(UTC)
+    saved = await outreach_repo.save(outreach)
+    return GlobalResponse(data=saved.model_dump(mode="json"), message="Reply sent")

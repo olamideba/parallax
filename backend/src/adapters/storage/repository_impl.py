@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.adapters.storage.models import (
@@ -23,6 +23,7 @@ from src.domain.models.outreach import (
     ExtractedClaim,
     ExtractedProfile,
     Outreach,
+    OutreachStatus,
     TriageVerdict,
 )
 from src.domain.models.professor import Capacity, Professor, Publication
@@ -45,9 +46,13 @@ def _record_to_outreach(r: OutreachRecord) -> Outreach:
         channel=r.channel,
         sender_email=r.sender_email,
         sender_name=r.sender_name,
+        subject=r.subject,
         body=r.body,
+        body_html=r.body_html,
         attachment_keys=json.loads(r.attachment_keys),
         received_at=r.received_at,
+        status=OutreachStatus(r.status),
+        replied_at=r.replied_at,
         triage_verdict=TriageVerdict(r.triage_verdict) if r.triage_verdict else None,
         debate_trace_id=r.debate_trace_id,
         extracted_profile=(
@@ -71,9 +76,13 @@ def _outreach_to_record(o: Outreach) -> OutreachRecord:
         channel=o.channel,
         sender_email=o.sender_email,
         sender_name=o.sender_name,
+        subject=o.subject,
         body=o.body,
+        body_html=o.body_html,
         attachment_keys=json.dumps(o.attachment_keys),
         received_at=o.received_at,
+        status=o.status.value,
+        replied_at=o.replied_at,
         triage_verdict=o.triage_verdict,
         debate_trace_id=o.debate_trace_id,
         decision_label=o.decision.label if o.decision else None,
@@ -96,6 +105,7 @@ def _record_to_professor(r: ProfessorRecord, pubs: list[PublicationRecord]) -> P
         id=r.id,
         email=r.email,
         display_name=r.display_name,
+        intake_email=r.intake_email,
         capacity=Capacity(
             open_slots=r.open_slots,
             students_committed=r.students_committed,
@@ -189,6 +199,7 @@ class SqlProfessorRepository(ProfessorRepository):
             id=professor.id,
             email=professor.email,
             display_name=professor.display_name,
+            intake_email=professor.intake_email,
             open_slots=professor.capacity.open_slots,
             students_committed=professor.capacity.students_committed,
             budget_amount=professor.capacity.budget_amount,
@@ -214,6 +225,16 @@ class SqlProfessorRepository(ProfessorRepository):
     async def get_by_email(self, email: str) -> Professor | None:
         result = await self._session.exec(
             select(ProfessorRecord).where(ProfessorRecord.email == email)
+        )
+        record = result.first()
+        if not record:
+            return None
+        pubs = await self._get_publications(record.id)
+        return _record_to_professor(record, pubs)
+
+    async def get_by_intake_email(self, intake_email: str) -> Professor | None:
+        result = await self._session.exec(
+            select(ProfessorRecord).where(ProfessorRecord.intake_email == intake_email)
         )
         record = result.first()
         if not record:
