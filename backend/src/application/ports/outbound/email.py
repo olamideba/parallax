@@ -16,6 +16,7 @@ class InboundEmail(BaseModel):
     text_body: str = ""
     html_body: str | None = None
     attachment_ids: list[str] = []
+    is_system_confirmation: bool = False
 
 
 class InboundEmailGateway(ABC):
@@ -27,6 +28,12 @@ class InboundEmailGateway(ABC):
 
     @abstractmethod
     def parse(self, payload: dict) -> InboundEmail:
+        """Build an InboundEmail from the webhook payload (metadata only — no body)."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def fetch_email(self, email_id: str) -> InboundEmail:
+        """Fetch the full email (incl. text/html body) from the provider API."""
         raise NotImplementedError
 
     @abstractmethod

@@ -18,6 +18,7 @@ from src.application.ports.outbound.repository import (
     ProfessorRepository,
 )
 from src.domain.models.outreach import (
+    SYSTEM_CONFIRMATION_CHANNEL,
     Decision,
     DecisionLabel,
     ExtractedClaim,
@@ -182,10 +183,21 @@ class SqlOutreachRepository(OutreachRepository):
         stmt = (
             select(OutreachRecord)
             .where(OutreachRecord.professor_id == professor_id)
+            .where(OutreachRecord.channel != SYSTEM_CONFIRMATION_CHANNEL)
             .order_by(OutreachRecord.received_at.desc())
         )
         if verdict is not None:
             stmt = stmt.where(OutreachRecord.triage_verdict == verdict.value)
+        result = await self._session.exec(stmt)
+        return [_record_to_outreach(r) for r in result.all()]
+
+    async def list_by_channel(self, professor_id: UUID, channel: str) -> list[Outreach]:
+        stmt = (
+            select(OutreachRecord)
+            .where(OutreachRecord.professor_id == professor_id)
+            .where(OutreachRecord.channel == channel)
+            .order_by(OutreachRecord.received_at.desc())
+        )
         result = await self._session.exec(stmt)
         return [_record_to_outreach(r) for r in result.all()]
 

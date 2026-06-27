@@ -4,15 +4,18 @@ import base64
 import hashlib
 import hmac
 from collections.abc import Mapping
+from email.utils import parseaddr
 
 import httpx
 from loguru import logger
 
+from src.adapters.email.confirmation import is_forwarding_confirmation
 from src.application.ports.outbound.email import InboundEmail, InboundEmailGateway
 from src.config import get_settings
 from src.domain.exceptions.base import IntakeError
 
 _ATTACHMENT_URL = "https://api.resend.com/emails/attachments/{id}"
+_RECEIVED_URL = "https://api.resend.com/emails/receiving/{id}"
 
 
 class ResendInboundGateway(InboundEmailGateway):
@@ -49,17 +52,40 @@ class ResendInboundGateway(InboundEmailGateway):
         return False
 
     def parse(self, payload: dict) -> InboundEmail:
-        data = payload.get("data", payload)
-        to_field = data.get("to")
-        recipient = to_field[0] if isinstance(to_field, list) else to_field
+        # Webhook payload is metadata only — text/html will be empty here.
+        return self._to_inbound(payload.get("data", payload))
+
+    async def fetch_email(self, email_id: str) -> InboundEmail:
+        settings = get_settings()
+        if not settings.RESEND_API_KEY:
+            raise IntakeError("RESEND_API_KEY is not configured")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                _RECEIVED_URL.format(id=email_id),
+                headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return self._to_inbound(data)
+
+    @staticmethod
+    def _to_inbound(data: dict) -> InboundEmail:
+        # The intake address is in `to`; fall back to `received_for`.
+        to_field = data.get("to") or data.get("received_for") or []
+        recipient = to_field if isinstance(to_field, str) else (to_field[0] if to_field else "")
+        # `from` is an RFC 5322 header: "Alice Chen <alice@mit.edu>" or just the address.
+        display_name, address = parseaddr(data.get("from", ""))
+        sender_email = address or data.get("from", "")
+        subject = data.get("subject")
         return InboundEmail(
-            recipient=recipient or "",
-            sender_email=data.get("from", ""),
-            sender_name=data.get("from_name"),
-            subject=data.get("subject"),
+            recipient=recipient,
+            sender_email=sender_email,
+            sender_name=display_name or None,
+            subject=subject,
             text_body=data.get("text") or "",
             html_body=data.get("html"),
             attachment_ids=[a["id"] for a in data.get("attachments", []) if "id" in a],
+            is_system_confirmation=is_forwarding_confirmation(sender_email, subject),
         )
 
     async def download_attachment(self, attachment_id: str) -> tuple[bytes, str]:

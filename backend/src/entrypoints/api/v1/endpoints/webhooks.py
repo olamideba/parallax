@@ -8,6 +8,7 @@ from loguru import logger
 
 from src.application.ports.outbound.email import InboundEmailGateway
 from src.application.use_cases.process_inbound_email import ProcessInboundEmailUseCase
+from src.domain.models.outreach import SYSTEM_CONFIRMATION_CHANNEL
 from src.entrypoints.api.dependencies import (
     get_inbound_gateway,
     get_process_inbound_email_use_case,
@@ -36,10 +37,23 @@ async def email_inbound(
         return Response(status_code=status.HTTP_401_UNAUTHORIZED)
 
     payload = json.loads(raw)
+    # Webhook is metadata-only; fetch the full body from the Resend API.
     inbound = gateway.parse(payload)
+    email_id = payload.get("data", {}).get("email_id")
+    if email_id:
+        try:
+            inbound = await gateway.fetch_email(email_id)
+        except Exception as exc:  # noqa: BLE001 — fall back to metadata, still ack
+            logger.warning("Could not fetch full email {}: {}", email_id, exc)
+
     outreach = await use_case.execute(inbound)
     if outreach is None:
         # Unknown intake address — discard but ack so Resend stops retrying.
+        return Response(status_code=status.HTTP_200_OK)
+
+    if outreach.channel == SYSTEM_CONFIRMATION_CHANNEL:
+        # Provider forwarding-confirmation email — store for the UI, don't triage.
+        logger.info("Forwarding-confirmation email {} stored (no triage)", outreach.id)
         return Response(status_code=status.HTTP_200_OK)
 
     triage_and_ingest.delay(str(outreach.id), str(outreach.professor_id))

@@ -9,7 +9,13 @@ from pydantic import BaseModel
 
 from src.application.ports.outbound.email import EmailSender
 from src.application.ports.outbound.repository import OutreachRepository
-from src.domain.models.outreach import Decision, DecisionLabel, OutreachStatus, TriageVerdict
+from src.domain.models.outreach import (
+    SYSTEM_CONFIRMATION_CHANNEL,
+    Decision,
+    DecisionLabel,
+    OutreachStatus,
+    TriageVerdict,
+)
 from src.entrypoints.api.dependencies import (
     CurrentProfessorDep,
     get_email_sender,
@@ -43,6 +49,22 @@ async def get_queue(
     return GlobalResponse(
         data=[o.model_dump(mode="json") for o in outreaches],
         message=f"{len(outreaches)} outreach(es) found",
+    )
+
+
+@router.get("/confirmations", response_model=GlobalResponse[list])
+async def get_forwarding_confirmations(
+    current_professor: CurrentProfessorDep,
+    outreach_repo: OutreachRepoDep,
+) -> GlobalResponse:
+    """Provider forwarding-confirmation emails (Gmail etc.) — never run through
+    triage. The frontend surfaces these so the professor can grab the verify link."""
+    confirmations = await outreach_repo.list_by_channel(
+        current_professor.id, SYSTEM_CONFIRMATION_CHANNEL
+    )
+    return GlobalResponse(
+        data=[o.model_dump(mode="json") for o in confirmations],
+        message=f"{len(confirmations)} confirmation email(s)",
     )
 
 

@@ -6,6 +6,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+EMAIL_CHANNEL = "email"
+SYSTEM_CONFIRMATION_CHANNEL = "system_confirmation"
+
 
 class OutreachStatus(StrEnum):
     PENDING_TRIAGE = "pending_triage"

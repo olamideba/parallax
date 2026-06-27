@@ -7,7 +7,12 @@ from uuid6 import uuid7
 
 from src.application.ports.outbound.email import InboundEmail
 from src.application.ports.outbound.repository import OutreachRepository, ProfessorRepository
-from src.domain.models.outreach import Outreach, OutreachStatus
+from src.domain.models.outreach import (
+    EMAIL_CHANNEL,
+    SYSTEM_CONFIRMATION_CHANNEL,
+    Outreach,
+    OutreachStatus,
+)
 
 
 class ProcessInboundEmailUseCase:
@@ -31,10 +36,15 @@ class ProcessInboundEmailUseCase:
             logger.warning("Inbound email for unknown intake address: {}", inbound.recipient)
             return None
 
+        channel = (
+            SYSTEM_CONFIRMATION_CHANNEL
+            if inbound.is_system_confirmation
+            else EMAIL_CHANNEL
+        )
         outreach = Outreach(
             id=uuid7(),
             professor_id=professor.id,
-            channel="email",
+            channel=channel,
             sender_email=inbound.sender_email,
             sender_name=inbound.sender_name,
             subject=inbound.subject,
