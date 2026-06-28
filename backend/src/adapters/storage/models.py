@@ -47,6 +47,8 @@ class PublicationRecord(UUIDBase, table=True):
     url: str | None = Field(default=None)
     storage_key: str | None = Field(default=None)
     indexed: bool = Field(default=False)
+    # Lifecycle: pending | indexing | indexed | needs_upload | failed
+    status: str = Field(default="pending", max_length=20, index=True)
 
     professor: Optional["ProfessorRecord"] = Relationship(back_populates="publications")
     chunks: list["PublicationChunkRecord"] = Relationship(back_populates="publication")
@@ -58,7 +60,7 @@ class PublicationChunkRecord(UUIDBase, table=True):
     publication_id: UUID = Field(foreign_key="publications.id", index=True)
     professor_id: UUID = Field(foreign_key="professors.id", index=True)
     chunk_text: str
-    embedding: list[float] | None = Field(default=None, sa_column=Column(Vector(1536)))
+    embedding: list[float] | None = Field(default=None, sa_column=Column(Vector(1024)))
 
     publication: Optional["PublicationRecord"] = Relationship(back_populates="chunks")
 

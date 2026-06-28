@@ -3,19 +3,21 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
-from sqlmodel import select
+from sqlmodel import col, delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.adapters.storage.models import (
     DebateTraceRecord,
     OutreachRecord,
     ProfessorRecord,
+    PublicationChunkRecord,
     PublicationRecord,
 )
 from src.application.ports.outbound.repository import (
     DebateTraceRepository,
     OutreachRepository,
     ProfessorRepository,
+    PublicationRepository,
 )
 from src.domain.models.outreach import (
     SYSTEM_CONFIRMATION_CHANNEL,
@@ -27,7 +29,12 @@ from src.domain.models.outreach import (
     OutreachStatus,
     TriageVerdict,
 )
-from src.domain.models.professor import Capacity, Professor, Publication
+from src.domain.models.professor import (
+    Capacity,
+    Professor,
+    Publication,
+    PublicationStatus,
+)
 from src.domain.models.society import DebateTrace, DebateTurn
 
 # --- Outreach mapping ---
@@ -117,18 +124,20 @@ def _record_to_professor(r: ProfessorRecord, pubs: list[PublicationRecord]) -> P
             hold_when_at_capacity=r.hold_when_at_capacity,
         ),
         gatekeeper_aggressiveness=r.gatekeeper_aggressiveness,
-        publications=[
-            Publication(
-                id=p.id,
-                professor_id=p.professor_id,
-                title=p.title,
-                doi=p.doi,
-                url=p.url,
-                storage_key=p.storage_key,
-                indexed=p.indexed,
-            )
-            for p in pubs
-        ],
+        publications=[_record_to_publication(p) for p in pubs],
+    )
+
+
+def _record_to_publication(p: PublicationRecord) -> Publication:
+    return Publication(
+        id=p.id,
+        professor_id=p.professor_id,
+        title=p.title,
+        doi=p.doi,
+        url=p.url,
+        storage_key=p.storage_key,
+        indexed=p.indexed,
+        status=PublicationStatus(p.status),
     )
 
 
@@ -278,3 +287,36 @@ class SqlDebateTraceRepository(DebateTraceRepository):
         )
         record = result.first()
         return _record_to_trace(record) if record else None
+
+
+class SqlPublicationRepository(PublicationRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, publication_id: UUID) -> Publication | None:
+        record = await self._session.get(PublicationRecord, publication_id)
+        return _record_to_publication(record) if record else None
+
+    async def save(self, publication: Publication) -> Publication:
+        record = PublicationRecord(
+            id=publication.id,
+            professor_id=publication.professor_id,
+            title=publication.title,
+            doi=publication.doi,
+            url=publication.url,
+            storage_key=publication.storage_key,
+            indexed=publication.indexed,
+            status=publication.status.value,
+        )
+        merged = await self._session.merge(record)
+        await self._session.commit()
+        await self._session.refresh(merged)
+        return _record_to_publication(merged)
+
+    async def clear_chunks(self, publication_id: UUID) -> None:
+        await self._session.exec(
+            delete(PublicationChunkRecord).where(
+                col(PublicationChunkRecord.publication_id) == publication_id
+            )
+        )
+        await self._session.commit()

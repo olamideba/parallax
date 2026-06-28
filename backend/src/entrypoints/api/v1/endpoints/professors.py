@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -14,12 +15,14 @@ from src.adapters.storage.models import ProfessorRecord, PublicationRecord
 from src.application.ports.outbound.email import InboundEmail
 from src.application.use_cases.process_inbound_email import ProcessInboundEmailUseCase
 from src.config import get_settings
+from src.domain.models.professor import PublicationStatus
 from src.entrypoints.api.dependencies import (
     CurrentProfessorDep,
     SessionDep,
     get_process_inbound_email_use_case,
 )
 from src.entrypoints.api.schemas import GlobalResponse
+from src.entrypoints.workers.ingestion_consumer import ingest_publication
 from src.entrypoints.workers.intake_consumer import triage_and_ingest
 
 router = APIRouter(prefix="/professors", tags=["professors"])
@@ -65,6 +68,7 @@ class PublicationInput(BaseModel):
     title: str | None = None
     doi: str | None = None
     url: str | None = None
+    storage_key: str | None = None
 
 
 # --- Helpers ---
@@ -94,6 +98,7 @@ def _publication_dict(p: PublicationRecord) -> dict:
         "doi": p.doi,
         "url": p.url,
         "indexed": p.indexed,
+        "status": p.status,
         "storage_key": p.storage_key,
     }
 
@@ -181,7 +186,9 @@ async def replace_my_publications(
             title=p.title,
             doi=p.doi,
             url=p.url,
+            storage_key=p.storage_key,
             indexed=False,
+            status=PublicationStatus.PENDING.value,
         )
         for p in body
     ]
@@ -189,9 +196,37 @@ async def replace_my_publications(
         session.add(pub)
 
     await session.commit()
+
+    # Dispatch ingestion for each publication with a resolvable source.
+    for pub in new_pubs:
+        if pub.storage_key or pub.url or pub.doi:
+            ingest_publication.delay(str(pub.id))
+
     return GlobalResponse(
         data=[_publication_dict(p) for p in new_pubs],
         message=f"{len(new_pubs)} publication(s) saved",
+    )
+
+
+@router.post("/me/publications/{publication_id}/ingest", response_model=GlobalResponse[dict])
+async def reingest_publication(
+    publication_id: UUID,
+    current_professor: CurrentProfessorDep,
+    session: SessionDep,
+) -> GlobalResponse:
+    """(Re)trigger ingestion for one publication — e.g. after a manual PDF upload."""
+    pub = await session.get(PublicationRecord, publication_id)
+    if pub is None or pub.professor_id != current_professor.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Publication not found")
+    if not (pub.storage_key or pub.url or pub.doi):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Publication has no storage_key, url, or doi to ingest",
+        )
+    ingest_publication.delay(str(pub.id))
+    return GlobalResponse(
+        data=_publication_dict(pub),
+        message="Ingestion queued",
     )
 
 

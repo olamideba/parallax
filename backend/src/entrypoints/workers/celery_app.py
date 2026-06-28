@@ -8,7 +8,10 @@ celery_app = Celery(
     "parallax",
     broker=_settings.CELERY_BROKER_URL,
     backend=_settings.CELERY_RESULT_BACKEND,
-    include=["src.entrypoints.workers.intake_consumer"],
+    include=[
+        "src.entrypoints.workers.intake_consumer",
+        "src.entrypoints.workers.ingestion_consumer",
+    ],
 )
 celery_app.conf.update(
     task_serializer="json",

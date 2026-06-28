@@ -10,10 +10,12 @@ import { api, Outreach, Decision } from '@/lib/api';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { Tag } from '@/components/Tag';
+import { useIsMobile } from '@/lib/useMediaQuery';
 import { ArrowLeft, Check, X, AlertCircle, FileText, Send, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function OutreachDetailPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const params = useParams();
   const id = params?.id as string;
 
@@ -186,7 +188,7 @@ export default function OutreachDetailPage() {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)' }}>
       {/* Top Header */}
       <header style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '14px 16px' : '18px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
             style={{
               width: 30, height: 30, borderRadius: '7px',
@@ -222,7 +224,7 @@ export default function OutreachDetailPage() {
       </header>
 
       {/* Main layout */}
-      <main style={{ flex: 1, maxWidth: '1200px', width: '100%', margin: '0 auto', padding: '32px 24px 80px', boxSizing: 'border-box' }}>
+      <main style={{ flex: 1, maxWidth: '1200px', width: '100%', margin: '0 auto', padding: isMobile ? '24px 16px 64px' : '32px 24px 80px', boxSizing: 'border-box' }}>
         
         {/* Back Link & Notifications */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
@@ -247,13 +249,13 @@ export default function OutreachDetailPage() {
         </div>
 
         {/* Content split grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '32px', alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: isMobile ? '20px' : '32px', alignItems: 'start' }}>
           
           {/* LEFT COLUMN: Candidate Profile and Original Outreach */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             
             {/* Candidate Identity Profile Card */}
-            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '28px', boxShadow: 'var(--shadow-sm)' }}>
+            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: isMobile ? '20px' : '28px', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                 <div>
                   <h1 style={{ margin: '0 0 4px', fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 600, color: 'var(--text-strong)' }}>
@@ -304,7 +306,7 @@ export default function OutreachDetailPage() {
             </div>
 
             {/* Original Outreach Email Block */}
-            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '28px', boxShadow: 'var(--shadow-sm)' }}>
+            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: isMobile ? '20px' : '28px', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>Outreach Communication</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
@@ -390,7 +392,7 @@ export default function OutreachDetailPage() {
             </div>
 
             {/* Decision Consensus & Actions */}
-            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '28px', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: isMobile ? '20px' : '28px', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
               
               <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px' }}>
                 <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '8px' }}>DEBATE RECOMMENDATION</span>

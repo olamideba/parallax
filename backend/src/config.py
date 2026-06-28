@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     QWEN_MODEL_GATEKEEPER: str = Field(default="qwen-turbo")
     QWEN_MODEL_DEBATE: str = Field(default="qwen-plus")
     QWEN_MODEL_ARBITRATOR: str = Field(default="qwen-plus")
+    # DashScope OpenAI-compatible endpoint + embeddings.
+    DASHSCOPE_BASE_URL: str = Field(
+        default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    )
+    DASHSCOPE_EMBED_MODEL: str = Field(default="text-embedding-v4")
+    # Must match the pgvector column dimension (PublicationChunkRecord.embedding).
+    DASHSCOPE_EMBED_DIMS: int = Field(default=1024)
+    DASHSCOPE_TIMEOUT: float = Field(default=60.0)
 
     # Debate
     DEBATE_ROUND_CAP: int = Field(default=3)
@@ -67,6 +75,12 @@ class Settings(BaseSettings):
     # Supabase Auth
     SUPABASE_JWT_SECRET: str = Field(default="")
     SUPABASE_URL: str = Field(default="")
+
+    # Publication ingestion
+    UNPAYWALL_EMAIL: str = Field(default="")
+    INGEST_CHUNK_SIZE: int = Field(default=2000)
+    INGEST_CHUNK_OVERLAP: int = Field(default=200)
+    INGEST_HTTP_TIMEOUT: float = Field(default=60.0)
 
     @computed_field
     @property

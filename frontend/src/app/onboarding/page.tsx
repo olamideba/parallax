@@ -11,12 +11,12 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Checkbox } from '@/components/Checkbox';
 import { Tag } from '@/components/Tag';
-import { 
-  Check, 
+import { useIsMobile } from '@/lib/useMediaQuery';
+import {
+  Check,
   CheckCircle, 
-  AlertTriangle, 
-  Link as LinkIcon, 
-  Loader, 
+  AlertTriangle,
+  Loader,
   ArrowLeft, 
   ArrowRight, 
   Upload, 
@@ -42,12 +42,15 @@ interface StepperProps {
 }
 
 function Stepper({ step, steps }: StepperProps) {
+  const isMobile = useIsMobile();
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '36px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: isMobile ? '28px' : '36px' }}>
       {steps.flatMap((s, i) => {
         const state = i < step ? 'done' : i === step ? 'current' : 'todo';
+        // On mobile, only the active step keeps its text label so the rail fits.
+        const showLabel = !isMobile || state === 'current';
         const node = (
-          <div key={'s' + i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div key={'s' + i} style={{ display: 'flex', alignItems: 'center', gap: showLabel ? '10px' : 0 }}>
             <span
               style={{
                 width: 26, height: 26, borderRadius: '999px', flexShrink: 0,
@@ -60,20 +63,22 @@ function Stepper({ step, steps }: StepperProps) {
             >
               {state === 'done' ? <Check size={14} color="var(--white)" /> : String(i + 1)}
             </span>
-            <span
-              style={{
-                fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
-                fontWeight: state === 'current' ? 600 : 500,
-                color: state === 'todo' ? 'var(--text-subtle)' : 'var(--text-strong)',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {s}
-            </span>
+            {showLabel && (
+              <span
+                style={{
+                  fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
+                  fontWeight: state === 'current' ? 600 : 500,
+                  color: state === 'todo' ? 'var(--text-subtle)' : 'var(--text-strong)',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {s}
+              </span>
+            )}
           </div>
         );
         const conn = i < steps.length - 1 ? (
-          <div key={'c' + i} style={{ flex: 1, height: 1, background: 'var(--border-default)', margin: '0 14px', minWidth: 24 }} />
+          <div key={'c' + i} style={{ flex: 1, height: 1, background: 'var(--border-default)', margin: isMobile ? '0 8px' : '0 14px', minWidth: isMobile ? 12 : 24 }} />
         ) : null;
         return conn ? [node, conn] : [node];
       })}
@@ -113,15 +118,13 @@ function ResolutionPill({ state }: { state: Paper['state'] }) {
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
 
   const STEPS = ['Publications', 'Lab capacity', 'Email forwarding', 'Review'];
   const [step, setStep] = useState(0);
 
   /* — Publications state — */
   const [doiText, setDoiText] = useState('');
-  const [orcidVal, setOrcidVal] = useState('');
-  const [orcidImported, setOrcidImported] = useState(false);
-  const [resolving, setResolving] = useState(false);
   const [papers, setPapers] = useState<Paper[]>([]);
 
   /* — Lab capacity state — */
@@ -224,21 +227,6 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleOrcidImport = () => {
-    if (!orcidVal.trim()) return;
-    setResolving(true);
-    setTimeout(() => {
-      setOrcidImported(true);
-      setResolving(false);
-      // Mock import papers from ORCID
-      const orcidPapers: Paper[] = [
-        { id: Date.now() + 1, t: 'Verified Research via ORCID integration', v: 'Nature Machine Intelligence 2024', cites: 12, state: 'indexed', doi: '10.1038/s42256-024-001' },
-        { id: Date.now() + 2, t: 'Adaptive Attention Architectures', v: 'JMLR 2023', cites: 45, state: 'indexed', doi: '10.5555/orcid-2' }
-      ];
-      setPapers(prev => [...orcidPapers, ...prev]);
-    }, 1200);
-  };
-
   const handleResolve = () => {
     if (!doiText.trim()) return;
     const lines = doiText.trim().split(/\n+/).filter(Boolean).slice(0, 3);
@@ -310,7 +298,7 @@ export default function OnboardingPage() {
         border: '1px solid var(--border-subtle)',
         borderRadius: 'var(--radius-xl)',
         boxShadow: 'var(--shadow-md)',
-        padding: '36px 40px'
+        padding: isMobile ? '24px 20px' : '36px 40px'
       }}
     >
       {children}
@@ -376,41 +364,42 @@ export default function OnboardingPage() {
       <>
         {monoHeader('Step 1 of 3')}
         {h2Title('Connect your published work')}
-        {subDescription('Parallax grounds every debate in your own research. Import via ORCID or paste a batch of DOIs and URLs — the system fetches full text where open-access and prompts you to upload PDFs for anything paywalled.')}
+        {subDescription('Parallax grounds every debate in your own research. Upload your paper PDFs to add them directly — the fastest, most reliable way to index your work. You can also paste DOIs or arXiv URLs below, and the system fetches full text where open-access and prompts you to upload PDFs for anything paywalled.')}
 
-        {/* ORCID row */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <Input
-            label="ORCID iD"
-            placeholder="0000-0002-1825-0097"
-            value={orcidVal}
-            onChange={e => setOrcidVal(e.target.value)}
-            leadingIcon={<LinkIcon size={16} style={{ color: 'var(--text-subtle)' }} />}
-            containerStyle={{ flex: 1, minWidth: '220px' }}
-          />
-          <Button
-            variant="primary"
-            onClick={handleOrcidImport}
-            disabled={resolving || !orcidVal.trim()}
-            leadingIcon={resolving ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+        {/* PDF drop zone — primary input */}
+        <div
+          style={{ border: '2px dashed var(--border-default)', borderRadius: 'var(--radius-xl)', padding: '36px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', textAlign: 'center', background: 'var(--surface-sunken)', color: 'var(--text-muted)', marginBottom: '24px', cursor: 'pointer' }}
+        >
+          <div
+            style={{
+              width: 44, height: 44, borderRadius: '999px', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--surface-card)', border: '1px solid var(--border-subtle)',
+            }}
           >
-            {orcidImported ? 'Re-import from ORCID' : 'Import from ORCID'}
-          </Button>
+            <Upload size={20} style={{ color: 'var(--navy-900)' }} />
+          </div>
+          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Drop PDFs here to add papers directly
+          </span>
+          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-subtle)' }}>
+            The fastest way to index your work — drag and drop one or more paper PDFs.
+          </span>
         </div>
 
         {/* Divider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-subtle)', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase' }}>
-            or paste manually
+            or add by DOI / URL
           </span>
           <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
         </div>
 
-        {/* DOI / URL textarea */}
+        {/* DOI / arXiv URL textarea — secondary input */}
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '6px' }}>
-            DOIs or paper URLs
+            DOIs or arXiv URLs
           </label>
           <textarea
             value={doiText}
@@ -426,22 +415,12 @@ export default function OnboardingPage() {
           />
           <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
             <span style={{ fontFamily: 'var(--font-sans)', fontSize: '12px', color: 'var(--text-subtle)' }}>
-              One DOI or URL per line. Paywalled papers will prompt for PDF upload.
+              One DOI or arXiv URL per line. Paywalled papers will prompt for PDF upload.
             </span>
             <Button variant="secondary" onClick={handleResolve} disabled={!doiText.trim()} style={{ flexShrink: 0 }}>
               Resolve & index
             </Button>
           </div>
-        </div>
-
-        {/* PDF drop zone */}
-        <div
-          style={{ border: '1px dashed var(--border-default)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-muted)', marginBottom: '24px', cursor: 'pointer' }}
-        >
-          <Upload size={16} style={{ color: 'var(--text-subtle)' }} />
-          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
-            Drop PDFs here to add papers directly
-          </span>
         </div>
 
         {/* Paper list */}
@@ -559,7 +538,7 @@ export default function OnboardingPage() {
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 14px', maxWidth: '56ch' }}>
             Declared by you, never inferred about the applicant. Used to assess feasibility — not shown to candidates.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px' }}>
             <div>
               <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '6px' }}>
                 Available budget
@@ -769,7 +748,7 @@ export default function OnboardingPage() {
         {subDescription('This is the ground truth every debate is measured against. You can update it any time from your lab profile — edits re-index and apply to subsequent outreach.')}
 
         {/* Top stat row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '14px', marginBottom: '16px' }}>
           {[
             { lbl: 'Publications indexed', val: indexed + ' of ' + papers.length },
             { lbl: 'Effective open slots', val: effectiveSlots },
@@ -857,7 +836,7 @@ export default function OnboardingPage() {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)' }}>
       {/* Top Bar Header */}
       <header style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ maxWidth: 760, margin: '0 auto', padding: isMobile ? '14px 16px' : '18px 24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             style={{
               width: 30, height: 30, borderRadius: '7px',
@@ -877,7 +856,7 @@ export default function OnboardingPage() {
       </header>
 
       {/* Main Content container */}
-      <div style={{ flex: 1, width: '100%', maxWidth: 760, margin: '0 auto', padding: '44px 24px 80px', boxSizing: 'border-box' }}>
+      <div style={{ flex: 1, width: '100%', maxWidth: 760, margin: '0 auto', padding: isMobile ? '28px 16px 64px' : '44px 24px 80px', boxSizing: 'border-box' }}>
         <Stepper step={step} steps={STEPS} />
         {body}
 

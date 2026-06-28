@@ -1,6 +1,31 @@
 from __future__ import annotations
 
+import fitz  # PyMuPDF
+from loguru import logger
 
-async def extract_text_from_pdf(storage_key: str) -> str:
-    """Download PDF from R2 and extract plain text via pypdf."""
-    raise NotImplementedError
+from src.application.ports.outbound.publication_source import PdfTextExtractor
+from src.domain.exceptions.base import IngestionError
+
+
+class PyMuPdfTextExtractor(PdfTextExtractor):
+    """Extract plain text from PDF bytes via PyMuPDF (fitz)."""
+
+    def extract_text(self, data: bytes) -> str:
+        try:
+            doc = fitz.open(stream=data, filetype="pdf")
+        except Exception as exc:  # noqa: BLE001 — fitz raises a variety of errors
+            raise IngestionError(f"Could not parse PDF: {exc}") from exc
+
+        parts: list[str] = []
+        try:
+            for page in doc:
+                try:
+                    text = page.get_text() or ""
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Failed to extract text from a PDF page: {}", exc)
+                    text = ""
+                if text.strip():
+                    parts.append(text)
+        finally:
+            doc.close()
+        return "\n\n".join(parts).strip()

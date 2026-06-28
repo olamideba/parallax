@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+
+class PublicationStatus(StrEnum):
+    """Lifecycle states for a publication's ingestion."""
+
+    PENDING = "pending"
+    INDEXING = "indexing"
+    INDEXED = "indexed"
+    NEEDS_UPLOAD = "needs_upload"
+    FAILED = "failed"
 
 
 class Publication(BaseModel):
@@ -13,6 +24,7 @@ class Publication(BaseModel):
     url: str | None = None
     storage_key: str | None = None
     indexed: bool = False
+    status: PublicationStatus = PublicationStatus.PENDING
 
 
 class Capacity(BaseModel):
