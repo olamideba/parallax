@@ -372,7 +372,7 @@ export default function OnboardingPage() {
       } catch {
         // Silently ignore polling errors
       }
-    }, 3000);
+    }, 9000);
     return () => clearInterval(t);
   }, [papers]);
 
