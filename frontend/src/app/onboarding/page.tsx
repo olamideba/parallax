@@ -101,7 +101,7 @@ function ResolutionPill({ state }: { state: Paper['state'] }) {
   const configs = {
     resolving: { label: 'Resolving…', color: 'var(--status-pending-ink)', bg: 'var(--status-pending-bg)', icon: <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> },
     indexed:   { label: 'Indexed',    color: 'var(--status-verified-ink)', bg: 'var(--status-verified-bg)', icon: <CheckCircle size={13} /> },
-    paywalled: { label: 'Upload PDF', color: 'var(--agent-3-ink)', bg: 'var(--agent-3-bg)', icon: <Lock size={13} /> },
+    paywalled: { label: 'Needs PDF',  color: 'var(--agent-3-ink)', bg: 'var(--agent-3-bg)', icon: <Lock size={13} /> },
     failed:    { label: 'Not found',  color: 'var(--status-refuted-ink)',  bg: 'var(--status-refuted-bg)',  icon: <XCircle size={13} /> },
   };
   const cfg = configs[state] || { label: state, color: 'var(--text-muted)', bg: 'var(--surface-muted)', icon: null };
@@ -226,20 +226,47 @@ export default function OnboardingPage() {
     }
   };
 
-  // DOI/URL path: local-only parse; API is called on Finish Setup (PUT)
-  const handleResolve = () => {
+  const handleResolve = async () => {
     if (!doiText.trim()) return;
-    const lines = doiText.trim().split(/\n+/).filter(Boolean);
-    const newPapers: Paper[] = lines.map((line, i) => ({
-      id: Date.now() + i,
+    const lines = doiText.trim().split(/\n+/).map(l => l.trim()).filter(Boolean);
+    setDoiText('');
+
+    // Add optimistic entries immediately so the user sees activity
+    const tempIds = lines.map((_, i) => Date.now() + i);
+    const optimistic: Paper[] = lines.map((line, i) => ({
+      id: tempIds[i],
       backendId: null,
       storageKey: null,
       t: line.slice(0, 60) + (line.length > 60 ? '…' : ''),
-      v: '—', cites: 0, state: 'resolving', doi: line.trim(),
+      v: '—', cites: 0, state: 'resolving' as const, doi: line,
     }));
-    setPapers(p => [...p, ...newPapers]);
-    setDoiText('');
-    // No API call here — server resolves DOIs when PUT is sent on Finish Setup
+    setPapers(p => [...p, ...optimistic]);
+
+    const payloads = lines.map(line => {
+      const isUrl = line.startsWith('http://') || line.startsWith('https://');
+      return {
+        title: null,
+        doi: isUrl ? null : line,
+        url: isUrl ? line : null,
+        storage_key: null,
+      };
+    });
+
+    try {
+      const created = await api.addPublications(payloads);
+      setPapers(prev => prev.map(p => {
+        const idx = tempIds.indexOf(p.id);
+        if (idx === -1) return p;
+        const pub = created[idx];
+        return { ...p, backendId: pub.id, storageKey: pub.storage_key, t: pub.title ?? p.t, state: statusToState(pub.status) };
+      }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to add publications';
+      setPapers(prev => prev.map(p =>
+        tempIds.includes(p.id) ? { ...p, state: 'failed' as const } : p
+      ));
+      setDropError(msg);
+    }
   };
 
   // PDF drop zone: upload each file immediately, add as resolving paper
@@ -317,33 +344,8 @@ export default function OnboardingPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // 1. Build publications payload (storage_key for PDF-first papers)
-      const payloadPubs: PublicationInput[] = papers.map(p => {
-        const isUrl = p.doi?.startsWith('http://') || p.doi?.startsWith('https://');
-        return {
-          title: p.t !== '—' ? p.t : null,
-          doi: isUrl ? null : (p.doi || null),
-          url: isUrl ? p.doi : null,
-          storage_key: p.storageKey ?? null,
-        };
-      });
-
-      // 2. PUT publications — get back real ids + initial statuses
-      const savedPubs = await api.putPublications(payloadPubs);
-
-      // Sync local papers with returned list (assign backendIds, keep resolving)
-      setPapers(prev => prev.map((p, i) => {
-        const saved = savedPubs[i];
-        if (!saved) return p;
-        return {
-          ...p,
-          backendId: saved.id,
-          storageKey: saved.storage_key ?? p.storageKey,
-          state: statusToState(saved.status),
-        };
-      }));
-
-      // 3. PATCH profile
+      // Publications are already saved individually as the user adds them.
+      // Just persist the profile.
       const budgetAmountInt = parseInt(fundingAmount.replace(/,/g, '')) || null;
       await api.patchProfessorProfile({
         open_slots: slots,
@@ -582,24 +584,22 @@ export default function OnboardingPage() {
                   {/* needs_upload: file picker */}
                   {p.state === 'paywalled' && p.backendId && (
                     <>
-                      <label style={{ cursor: 'pointer' }} title="Upload PDF">
-                        <Button
-                          variant="ghost"
-                          style={{ padding: '4px 10px', fontSize: '12px', pointerEvents: 'none' }}
-                        >
-                          Upload PDF
-                        </Button>
-                        <input
-                          type="file"
-                          accept=".pdf"
-                          style={{ display: 'none' }}
-                          onChange={e => {
-                            const file = e.target.files?.[0];
+                      <Button
+                        variant="ghost"
+                        style={{ padding: '4px 10px', fontSize: '12px' }}
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = '.pdf';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
                             if (file) handleRetryUpload(p, file);
-                            e.target.value = '';
-                          }}
-                        />
-                      </label>
+                          };
+                          input.click();
+                        }}
+                      >
+                        Upload PDF
+                      </Button>
                       {retryErrors[p.id] && (
                         <span style={{ fontSize: '11px', color: 'var(--status-refuted-ink)' }}>
                           {retryErrors[p.id]}

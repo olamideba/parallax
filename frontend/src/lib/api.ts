@@ -30,6 +30,48 @@ export interface Decision {
   overridden_by_professor: boolean;
 }
 
+// ── Debate trace (the replay surface) ───────────────────────────────────────
+// Mirrors backend/src/domain/models/society.py
+export type AgentRole = 'gatekeeper' | 'advocate' | 'auditor' | 'assessor' | 'arbitrator';
+
+export interface Receipt {
+  source_title: string;
+  chunk_text: string;
+  relevance_note: string | null;
+}
+
+// How an agent reached for grounding during a turn (skill / MCP / RAG).
+// Surfaced in the replay as tool chips so the engineering depth is visible.
+export type ActionKind = 'skill' | 'mcp' | 'retrieval';
+
+export interface AgentAction {
+  kind: ActionKind;
+  name: string;
+  detail: string | null;
+  source: string | null;   // MCP server id / skill id / index name
+}
+
+export interface DebateTurn {
+  round: number;
+  role: AgentRole;
+  content: string;
+  receipts: Receipt[];
+  actions: AgentAction[];
+  references_turn_ids: number[];   // indices of earlier turns this one builds on
+  created_at: string;              // ISO timestamp
+}
+
+export interface DebateTrace {
+  id: string;
+  outreach_id: string;
+  professor_id: string;
+  turns: DebateTurn[];
+  round_cap: number;
+  terminated_at_round: number | null;
+  started_at: string;
+  ended_at: string | null;
+}
+
 export interface Outreach {
   id: string;
   professor_id: string;
@@ -209,6 +251,8 @@ export const api = {
   },
   
   getReviewDetail: (id: string) => apiFetch<Outreach>(`/reviews/${id}`),
+
+  getDebateTrace: (id: string) => apiFetch<DebateTrace>(`/reviews/${id}/debate`),
   
   approveDecision: (id: string) => apiFetch<Outreach>(`/reviews/${id}/approve`, {
     method: 'POST',

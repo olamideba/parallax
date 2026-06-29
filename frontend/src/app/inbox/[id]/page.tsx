@@ -11,7 +11,7 @@ import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { Tag } from '@/components/Tag';
 import { useIsMobile } from '@/lib/useMediaQuery';
-import { ArrowLeft, Check, X, AlertCircle, FileText, Send, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Check, X, AlertCircle, FileText, Send, Sparkles, AlertTriangle, RefreshCw, Play } from 'lucide-react';
 
 export default function OutreachDetailPage() {
   const router = useRouter();
@@ -422,6 +422,22 @@ export default function OutreachDetailPage() {
                   <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Debate not completed.</span>
                 )}
               </div>
+
+              {/* Debate replay entry point — the "wow" surface */}
+              {outreach.debate_trace_id && (
+                <Link
+                  href={`/inbox/${outreach.id}/replay`}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    textDecoration: 'none', padding: '10px 14px',
+                    background: 'var(--navy-900)', color: '#fff',
+                    borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-sans)',
+                    fontSize: 'var(--text-sm)', fontWeight: 600,
+                  }}
+                >
+                  <Play size={14} /> Watch the debate replay
+                </Link>
+              )}
 
               {/* Rationale text */}
               {decision?.rationale && (
