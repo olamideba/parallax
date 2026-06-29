@@ -282,7 +282,7 @@ export default function OnboardingPage() {
     }
   };
 
-  // Retry upload for paywalled / failed papers
+  // needs_upload: file picker → uploadPublicationPdf(file, id)
   const handleRetryUpload = async (paper: Paper, file: File) => {
     if (!paper.backendId) return;
     setRetryErrors(e => ({ ...e, [paper.id]: '' }));
@@ -292,6 +292,21 @@ export default function OnboardingPage() {
       // Polling loop will pick up the new status
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
+      setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'needs_upload' as Paper['state'] } : p));
+      setRetryErrors(e => ({ ...e, [paper.id]: msg }));
+    }
+  };
+
+  // failed: no file picker — PDF already in R2, just re-trigger ingestion
+  const handleReingest = async (paper: Paper) => {
+    if (!paper.backendId) return;
+    setRetryErrors(e => ({ ...e, [paper.id]: '' }));
+    setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'resolving' } : p));
+    try {
+      await api.reingestPublication(paper.backendId);
+      // Polling loop will pick up the new status
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Retry failed';
       setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'failed' } : p));
       setRetryErrors(e => ({ ...e, [paper.id]: msg }));
     }
@@ -564,12 +579,10 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                   <ResolutionPill state={p.state} />
-                  {(p.state === 'paywalled' || p.state === 'failed') && p.backendId && (
+                  {/* needs_upload: file picker */}
+                  {p.state === 'paywalled' && p.backendId && (
                     <>
-                      <label
-                        style={{ cursor: 'pointer' }}
-                        title="Upload PDF to retry ingestion"
-                      >
+                      <label style={{ cursor: 'pointer' }} title="Upload PDF">
                         <Button
                           variant="ghost"
                           style={{ padding: '4px 10px', fontSize: '12px', pointerEvents: 'none' }}
@@ -587,6 +600,23 @@ export default function OnboardingPage() {
                           }}
                         />
                       </label>
+                      {retryErrors[p.id] && (
+                        <span style={{ fontSize: '11px', color: 'var(--status-refuted-ink)' }}>
+                          {retryErrors[p.id]}
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {/* failed: no file picker — reingest directly */}
+                  {p.state === 'failed' && p.backendId && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        style={{ padding: '4px 10px', fontSize: '12px' }}
+                        onClick={() => handleReingest(p)}
+                      >
+                        Retry
+                      </Button>
                       {retryErrors[p.id] && (
                         <span style={{ fontSize: '11px', color: 'var(--status-refuted-ink)' }}>
                           {retryErrors[p.id]}

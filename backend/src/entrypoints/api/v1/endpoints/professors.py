@@ -210,6 +210,33 @@ async def replace_my_publications(
     )
 
 
+@router.post("/me/publications", response_model=GlobalResponse[dict])
+async def add_publication(
+    body: PublicationInput,
+    current_professor: CurrentProfessorDep,
+    session: SessionDep,
+) -> GlobalResponse:
+    """Append a single publication without touching existing ones."""
+    pub = PublicationRecord(
+        id=uuid7(),
+        professor_id=current_professor.id,
+        title=body.title,
+        doi=body.doi,
+        url=body.url,
+        storage_key=body.storage_key,
+        indexed=False,
+        status=PublicationStatus.PENDING.value,
+    )
+    session.add(pub)
+    await session.commit()
+    await session.refresh(pub)
+
+    if pub.storage_key or pub.url or pub.doi:
+        ingest_publication.delay(str(pub.id))
+
+    return GlobalResponse(data=_publication_dict(pub), message="Publication added")
+
+
 @router.post("/me/publications/{publication_id}/ingest", response_model=GlobalResponse[dict])
 async def reingest_publication(
     publication_id: UUID,

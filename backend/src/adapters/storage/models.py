@@ -51,7 +51,10 @@ class PublicationRecord(UUIDBase, table=True):
     status: str = Field(default="pending", max_length=20, index=True)
 
     professor: Optional["ProfessorRecord"] = Relationship(back_populates="publications")
-    chunks: list["PublicationChunkRecord"] = Relationship(back_populates="publication")
+    chunks: list["PublicationChunkRecord"] = Relationship(
+        back_populates="publication",
+        sa_relationship_kwargs={"passive_deletes": True},
+    )
 
 
 class PublicationChunkRecord(UUIDBase, table=True):

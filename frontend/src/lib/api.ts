@@ -182,6 +182,22 @@ export const api = {
     return envelope.data;
   },
 
+  addPublication: (payload: PublicationInput) =>
+    apiFetch<Publication>('/professors/me/publications', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  addPublications: (payloads: PublicationInput[]) =>
+    Promise.all(
+      payloads.map((p) =>
+        apiFetch<Publication>('/professors/me/publications', {
+          method: 'POST',
+          body: JSON.stringify(p),
+        })
+      )
+    ),
+
   reingestPublication: (publicationId: string) =>
     apiFetch<Publication>(`/professors/me/publications/${publicationId}/ingest`, {
       method: 'POST',
