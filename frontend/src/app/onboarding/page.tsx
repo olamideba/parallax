@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { api, PublicationInput } from '@/lib/api';
+import { api, PublicationInput, PublicationStatus } from '@/lib/api';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -28,12 +28,22 @@ import {
 
 interface Paper {
   id: number;
+  backendId: string | null;    // set after PUT returns
+  storageKey: string | null;   // set after PDF upload
   t: string;
   v: string;
   cites: number;
   state: 'resolving' | 'indexed' | 'paywalled' | 'failed';
   doi: string;
 }
+
+const statusToState = (s: PublicationStatus): Paper['state'] => ({
+  pending:      'resolving',
+  indexing:     'resolving',
+  indexed:      'indexed',
+  needs_upload: 'paywalled',
+  failed:       'failed',
+} as Record<PublicationStatus, Paper['state']>)[s] ?? 'failed';
 
 // ── Stepper Component ──
 interface StepperProps {
@@ -126,6 +136,8 @@ export default function OnboardingPage() {
   /* — Publications state — */
   const [doiText, setDoiText] = useState('');
   const [papers, setPapers] = useState<Paper[]>([]);
+  const [dropError, setDropError] = useState<string | null>(null);
+  const [retryErrors, setRetryErrors] = useState<Record<number, string>>({});
 
   /* — Lab capacity state — */
   const [slots, setSlots] = useState(3);
@@ -199,72 +211,126 @@ export default function OnboardingPage() {
       if (pubs && pubs.length > 0) {
         setPapers(pubs.map((p, idx) => ({
           id: idx + 1,
-          t: p.title,
+          backendId: p.id,
+          storageKey: p.storage_key,
+          t: p.title ?? '—',
           v: '—',
           cites: 0,
-          state: p.indexed ? 'indexed' : 'paywalled',
-          doi: p.doi || p.url || '',
+          state: statusToState(p.status),
+          doi: p.doi ?? p.url ?? '',
         })));
-      } else {
-        // Fallback demo papers if none saved yet
-        setPapers([
-          { id: 1, t: 'Sparse-attention kernels for long sequences', v: 'ICML 2023', cites: 142, state: 'indexed', doi: '10.5555/1234' },
-          { id: 2, t: 'Implicit regularisation in attention', v: 'NeurIPS 2022', cites: 88, state: 'indexed', doi: '10.5555/5678' },
-          { id: 3, t: 'Retrieval-augmented reasoning at scale', v: 'ACL 2024', cites: 37, state: 'indexed', doi: '10.5555/9012' },
-          { id: 4, t: 'Efficient transformers: a survey', v: 'TMLR 2023', cites: 261, state: 'paywalled', doi: '10.5555/3456' },
-          { id: 5, t: 'Low-rank adaptation of large models', v: 'ICLR 2023', cites: 19, state: 'failed', doi: '10.5555/7890' },
-        ]);
       }
+      // If no publications yet, start with empty list (user will add via drop zone or DOI)
     } catch (err) {
-      console.warn("Failed to load onboarding info from backend, falling back to defaults:", err);
-      setPapers([
-        { id: 1, t: 'Sparse-attention kernels for long sequences', v: 'ICML 2023', cites: 142, state: 'indexed', doi: '10.5555/1234' },
-        { id: 2, t: 'Implicit regularisation in attention', v: 'NeurIPS 2022', cites: 88, state: 'indexed', doi: '10.5555/5678' },
-        { id: 3, t: 'Retrieval-augmented reasoning at scale', v: 'ACL 2024', cites: 37, state: 'indexed', doi: '10.5555/9012' },
-        { id: 4, t: 'Efficient transformers: a survey', v: 'TMLR 2023', cites: 261, state: 'paywalled', doi: '10.5555/3456' },
-        { id: 5, t: 'Low-rank adaptation of large models', v: 'ICLR 2023', cites: 19, state: 'failed', doi: '10.5555/7890' },
-      ]);
+      console.warn('Failed to load onboarding info from backend:', err);
     }
   };
 
+  // DOI/URL path: local-only parse; API is called on Finish Setup (PUT)
   const handleResolve = () => {
     if (!doiText.trim()) return;
-    const lines = doiText.trim().split(/\n+/).filter(Boolean).slice(0, 3);
+    const lines = doiText.trim().split(/\n+/).filter(Boolean);
     const newPapers: Paper[] = lines.map((line, i) => ({
       id: Date.now() + i,
-      t: 'Resolving: ' + line.slice(0, 48) + (line.length > 48 ? '…' : ''),
-      v: '—', cites: 0, state: 'resolving', doi: line,
+      backendId: null,
+      storageKey: null,
+      t: line.slice(0, 60) + (line.length > 60 ? '…' : ''),
+      v: '—', cites: 0, state: 'resolving', doi: line.trim(),
     }));
     setPapers(p => [...p, ...newPapers]);
     setDoiText('');
-    setTimeout(() => {
-      setPapers(p => p.map(pp =>
-        pp.state === 'resolving'
-          ? { ...pp, state: 'indexed', t: 'Resolved paper from ' + pp.doi.slice(0, 30), v: '2024', cites: 0 }
-          : pp
-      ));
-    }, 1600);
+    // No API call here — server resolves DOIs when PUT is sent on Finish Setup
+  };
+
+  // PDF drop zone: upload each file immediately, add as resolving paper
+  const handlePdfFiles = async (files: File[]) => {
+    setDropError(null);
+    for (const file of files) {
+      if (!file.name.toLowerCase().endsWith('.pdf')) {
+        setDropError('Only PDF files are supported');
+        continue;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        setDropError('File exceeds 25 MB limit');
+        continue;
+      }
+      const newId = Date.now() + Math.random();
+      const placeholder: Paper = {
+        id: newId,
+        backendId: null,
+        storageKey: null,
+        t: file.name.replace(/\.pdf$/i, ''),
+        v: '—', cites: 0, state: 'resolving', doi: '',
+      };
+      setPapers(p => [...p, placeholder]);
+      try {
+        const { storage_key } = await api.uploadPublicationPdf(file);
+        setPapers(p => p.map(pp =>
+          pp.id === newId ? { ...pp, storageKey: storage_key } : pp
+        ));
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Upload failed';
+        if (msg.includes('25 MB') || msg.includes('413')) {
+          setDropError('File exceeds 25 MB limit');
+        } else if (msg.includes('415') || msg.includes('PDF')) {
+          setDropError('Only PDF files are supported');
+        } else {
+          setDropError(msg);
+        }
+        setPapers(p => p.filter(pp => pp.id !== newId));
+      }
+    }
+  };
+
+  // Retry upload for paywalled / failed papers
+  const handleRetryUpload = async (paper: Paper, file: File) => {
+    if (!paper.backendId) return;
+    setRetryErrors(e => ({ ...e, [paper.id]: '' }));
+    setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'resolving' } : p));
+    try {
+      await api.uploadPublicationPdf(file, paper.backendId);
+      // Polling loop will pick up the new status
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'failed' } : p));
+      setRetryErrors(e => ({ ...e, [paper.id]: msg }));
+    }
   };
 
   const handleFinishSetup = async () => {
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // 1. Prepare publications list
+
+      // 1. Build publications payload (storage_key for PDF-first papers)
       const payloadPubs: PublicationInput[] = papers.map(p => {
         const isUrl = p.doi?.startsWith('http://') || p.doi?.startsWith('https://');
         return {
-          title: p.t,
+          title: p.t !== '—' ? p.t : null,
           doi: isUrl ? null : (p.doi || null),
           url: isUrl ? p.doi : null,
+          storage_key: p.storageKey ?? null,
         };
       });
 
-      // 2. Prepare profile list
+      // 2. PUT publications — get back real ids + initial statuses
+      const savedPubs = await api.putPublications(payloadPubs);
+
+      // Sync local papers with returned list (assign backendIds, keep resolving)
+      setPapers(prev => prev.map((p, i) => {
+        const saved = savedPubs[i];
+        if (!saved) return p;
+        return {
+          ...p,
+          backendId: saved.id,
+          storageKey: saved.storage_key ?? p.storageKey,
+          state: statusToState(saved.status),
+        };
+      }));
+
+      // 3. PATCH profile
       const budgetAmountInt = parseInt(fundingAmount.replace(/,/g, '')) || null;
-      
-      const payloadProfile = {
+      await api.patchProfessorProfile({
         open_slots: slots,
         students_committed: committed,
         budget_amount: budgetAmountInt,
@@ -272,14 +338,9 @@ export default function OnboardingPage() {
         recruiting_topics: areas,
         auto_resolve_declines: autoDecline,
         hold_when_at_capacity: holdAtCapacity,
-      };
-
-      // 3. Save sequentially to backend
-      await api.putPublications(payloadPubs);
-      await api.patchProfessorProfile(payloadProfile);
+      });
 
       if (user) {
-        // Also persist onboarding completeness locally for fast routing
         localStorage.setItem(`onboarding_completed_${user.id}`, 'true');
       }
 
@@ -289,6 +350,31 @@ export default function OnboardingPage() {
       setSaving(false);
     }
   };
+
+  // Poll while any paper is still resolving
+  useEffect(() => {
+    const hasLive = papers.some(p => p.state === 'resolving');
+    if (!hasLive) return;
+    const t = setInterval(async () => {
+      try {
+        const pubs = await api.getPublications();
+        setPapers(prev => prev.map(p => {
+          if (!p.backendId) return p;
+          const fresh = pubs.find(q => q.id === p.backendId);
+          if (!fresh) return p;
+          return {
+            ...p,
+            t: fresh.title ?? p.t,
+            state: statusToState(fresh.status),
+            storageKey: fresh.storage_key ?? p.storageKey,
+          };
+        }));
+      } catch {
+        // Silently ignore polling errors
+      }
+    }, 3000);
+    return () => clearInterval(t);
+  }, [papers]);
 
   /* ── helper layout wrappers ── */
   const cardWrap = (children: React.ReactNode) => (
@@ -368,7 +454,24 @@ export default function OnboardingPage() {
 
         {/* PDF drop zone — primary input */}
         <div
-          style={{ border: '2px dashed var(--border-default)', borderRadius: 'var(--radius-xl)', padding: '36px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', textAlign: 'center', background: 'var(--surface-sunken)', color: 'var(--text-muted)', marginBottom: '24px', cursor: 'pointer' }}
+          style={{ border: '2px dashed var(--border-default)', borderRadius: 'var(--radius-xl)', padding: '36px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', textAlign: 'center', background: 'var(--surface-sunken)', color: 'var(--text-muted)', marginBottom: dropError ? '8px' : '24px', cursor: 'pointer', position: 'relative' }}
+          onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+          onDrop={e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const files = Array.from(e.dataTransfer.files);
+            handlePdfFiles(files);
+          }}
+          onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.pdf';
+            input.multiple = true;
+            input.onchange = () => {
+              if (input.files) handlePdfFiles(Array.from(input.files));
+            };
+            input.click();
+          }}
         >
           <div
             style={{
@@ -386,6 +489,11 @@ export default function OnboardingPage() {
             The fastest way to index your work — drag and drop one or more paper PDFs.
           </span>
         </div>
+        {dropError && (
+          <div style={{ marginBottom: '16px', fontFamily: 'var(--font-sans)', fontSize: '12px', color: 'var(--status-refuted-ink)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <XCircle size={13} />{dropError}
+          </div>
+        )}
 
         {/* Divider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
@@ -456,10 +564,35 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                   <ResolutionPill state={p.state} />
-                  {p.state === 'paywalled' && (
-                    <Button variant="ghost" style={{ padding: '4px 10px', fontSize: '12px' }}>
-                      Upload PDF
-                    </Button>
+                  {(p.state === 'paywalled' || p.state === 'failed') && p.backendId && (
+                    <>
+                      <label
+                        style={{ cursor: 'pointer' }}
+                        title="Upload PDF to retry ingestion"
+                      >
+                        <Button
+                          variant="ghost"
+                          style={{ padding: '4px 10px', fontSize: '12px', pointerEvents: 'none' }}
+                        >
+                          Upload PDF
+                        </Button>
+                        <input
+                          type="file"
+                          accept=".pdf"
+                          style={{ display: 'none' }}
+                          onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) handleRetryUpload(p, file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                      {retryErrors[p.id] && (
+                        <span style={{ fontSize: '11px', color: 'var(--status-refuted-ink)' }}>
+                          {retryErrors[p.id]}
+                        </span>
+                      )}
+                    </>
                   )}
                   <button
                     onClick={() => setPapers(pp => pp.filter(x => x.id !== p.id))}

@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     INGEST_CHUNK_SIZE: int = Field(default=2000)
     INGEST_CHUNK_OVERLAP: int = Field(default=200)
     INGEST_HTTP_TIMEOUT: float = Field(default=60.0)
+    UPLOAD_MAX_MB: int = Field(default=25)
 
     @computed_field
     @property
