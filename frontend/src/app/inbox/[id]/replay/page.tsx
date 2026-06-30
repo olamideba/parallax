@@ -19,6 +19,7 @@ import {
 import { ArrowLeft, Play, Pause, SkipBack, SkipForward, FlaskConical, Plug, Puzzle, Database } from 'lucide-react';
 import DebateAgent from './DebateAgent';
 import { ROOM_BG, TABLE_SPRITE } from '@/lib/replay/assets';
+import { TABLE_CSS } from '@/lib/replay/seminarRoom';
 import styles from './replay.module.css';
 
 const SPEEDS = [1, 1.5, 2] as const;
@@ -124,7 +125,7 @@ export default function DebateReplayPage() {
   if (!trace) return null;
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)' }}>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)', overflow: 'hidden' }}>
       {/* Header */}
       <header style={hdr}>
         <Link href={`/inbox/${id}`} style={backLink}>
@@ -145,15 +146,18 @@ export default function DebateReplayPage() {
       </header>
 
       {/* Body: stage (left) + rail (right) */}
-      <main style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(300px, 1fr)', gap: 0, minHeight: 0 }}>
+      <main style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(300px, 1fr)', gap: 0, minHeight: 0, overflow: 'hidden' }}>
         {/* ── STAGE ── pixel-art seminar room; sprites + speech bubble animate
             off the same playhead-driven clock as the transport and log. */}
         <section style={stage}>
           <div className={styles.roomStage}>
             <img src={ROOM_BG} alt="" className={styles.roomBackground} />
-            {/* Table shares the exact 1200×896 canvas as the room — render as
-                full-bleed overlay so it aligns with zero math. */}
-            <img src={TABLE_SPRITE} alt="" className={styles.tableOverlay} />
+            <img
+              src={TABLE_SPRITE}
+              alt=""
+              className={styles.tableProp}
+              style={{ left: `${TABLE_CSS.left}%`, top: `${TABLE_CSS.top}%`, width: `${TABLE_CSS.width}%`, zIndex: TABLE_CSS.zIndex }}
+            />
             {SEAT_ORDER.map((role, i) => {
               const meta = ROLE_META[role];
               const isActive = activeTurn?.role === role && speaking;
@@ -354,8 +358,8 @@ const center: React.CSSProperties = { minHeight: '100vh', display: 'flex', align
 const hdr: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' };
 const backLink: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' };
 const demoBadge: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--status-triage-ink)', border: '1px solid var(--status-triage-ink)', borderRadius: 'var(--radius-sm)', padding: '2px 6px' };
-const stage: React.CSSProperties = { display: 'flex', flexDirection: 'column', minHeight: 0 };
-const bubbleWrap: React.CSSProperties = { display: 'flex', justifyContent: 'center', alignItems: 'flex-end', minHeight: 120, padding: '12px 20px 20px' };
+const stage: React.CSSProperties = { display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' };
+const bubbleWrap: React.CSSProperties = { display: 'flex', justifyContent: 'center', alignItems: 'flex-end', flex: '0 0 auto', minHeight: 90, maxHeight: 180, padding: '10px 20px 16px', overflow: 'hidden' };
 const bubble: React.CSSProperties = { maxWidth: 560, background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '14px 18px', boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column' };
 const rail: React.CSSProperties = { display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-subtle)', background: 'var(--surface-card)', minHeight: 0 };
 const railLabel: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.05em' };

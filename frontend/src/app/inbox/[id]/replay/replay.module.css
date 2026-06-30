@@ -1,9 +1,12 @@
 .roomStage {
   position: relative;
-  flex: 1 1 0;
-  min-height: 0;
-  overflow: hidden;
+  width: 100%;
+  /* Lock to the canvas aspect ratio so neither image needs to crop or stretch.
+     Both PNGs are 1200×896; this makes the container the exact same shape. */
+  aspect-ratio: 1200 / 896;
+  flex-shrink: 0;
   background: #0f1420;
+  overflow: hidden;
 }
 
 .roomBackground {
@@ -11,19 +14,16 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* fill: container is already 1200/896 ratio so this = no stretch, no crop */
+  object-fit: fill;
   image-rendering: pixelated;
 }
 
-.tableOverlay {
+.tableProp {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: fill;
   image-rendering: pixelated;
   pointer-events: none;
-  z-index: 20;
+  height: auto;
 }
 
 .characterWrapper {

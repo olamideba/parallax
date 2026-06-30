@@ -15,7 +15,7 @@ interface DebateAgentProps {
   idleDelay?: number;
 }
 
-const SPRITE_HEIGHT = 78;
+const SPRITE_HEIGHT = 96;
 
 export default function DebateAgent({
   role,
