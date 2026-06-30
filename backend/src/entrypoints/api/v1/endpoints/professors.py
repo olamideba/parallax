@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -12,14 +13,18 @@ from uuid6 import uuid7
 from src.adapters.email.intake import derive_intake_address
 from src.adapters.storage.models import ProfessorRecord, PublicationRecord
 from src.application.ports.outbound.email import InboundEmail
+from src.application.ports.outbound.object_storage import ObjectStorage
 from src.application.use_cases.process_inbound_email import ProcessInboundEmailUseCase
 from src.config import get_settings
+from src.domain.models.professor import PublicationStatus
 from src.entrypoints.api.dependencies import (
     CurrentProfessorDep,
     SessionDep,
+    get_object_storage,
     get_process_inbound_email_use_case,
 )
 from src.entrypoints.api.schemas import GlobalResponse
+from src.entrypoints.workers.ingestion_consumer import ingest_publication
 from src.entrypoints.workers.intake_consumer import triage_and_ingest
 
 router = APIRouter(prefix="/professors", tags=["professors"])
@@ -65,6 +70,7 @@ class PublicationInput(BaseModel):
     title: str | None = None
     doi: str | None = None
     url: str | None = None
+    storage_key: str | None = None
 
 
 # --- Helpers ---
@@ -94,6 +100,7 @@ def _publication_dict(p: PublicationRecord) -> dict:
         "doi": p.doi,
         "url": p.url,
         "indexed": p.indexed,
+        "status": p.status,
         "storage_key": p.storage_key,
     }
 
@@ -181,7 +188,9 @@ async def replace_my_publications(
             title=p.title,
             doi=p.doi,
             url=p.url,
+            storage_key=p.storage_key,
             indexed=False,
+            status=PublicationStatus.PENDING.value,
         )
         for p in body
     ]
@@ -189,9 +198,122 @@ async def replace_my_publications(
         session.add(pub)
 
     await session.commit()
+
+    # Dispatch ingestion for each publication with a resolvable source.
+    for pub in new_pubs:
+        if pub.storage_key or pub.url or pub.doi:
+            ingest_publication.delay(str(pub.id))
+
     return GlobalResponse(
         data=[_publication_dict(p) for p in new_pubs],
         message=f"{len(new_pubs)} publication(s) saved",
+    )
+
+
+@router.post("/me/publications", response_model=GlobalResponse[dict])
+async def add_publication(
+    body: PublicationInput,
+    current_professor: CurrentProfessorDep,
+    session: SessionDep,
+) -> GlobalResponse:
+    """Append a single publication without touching existing ones."""
+    pub = PublicationRecord(
+        id=uuid7(),
+        professor_id=current_professor.id,
+        title=body.title,
+        doi=body.doi,
+        url=body.url,
+        storage_key=body.storage_key,
+        indexed=False,
+        status=PublicationStatus.PENDING.value,
+    )
+    session.add(pub)
+    await session.commit()
+    await session.refresh(pub)
+
+    if pub.storage_key or pub.url or pub.doi:
+        ingest_publication.delay(str(pub.id))
+
+    return GlobalResponse(data=_publication_dict(pub), message="Publication added")
+
+
+@router.post("/me/publications/{publication_id}/ingest", response_model=GlobalResponse[dict])
+async def reingest_publication(
+    publication_id: UUID,
+    current_professor: CurrentProfessorDep,
+    session: SessionDep,
+) -> GlobalResponse:
+    """(Re)trigger ingestion for one publication — e.g. after a manual PDF upload."""
+    pub = await session.get(PublicationRecord, publication_id)
+    if pub is None or pub.professor_id != current_professor.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Publication not found")
+    if not (pub.storage_key or pub.url or pub.doi):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Publication has no storage_key, url, or doi to ingest",
+        )
+    ingest_publication.delay(str(pub.id))
+    return GlobalResponse(
+        data=_publication_dict(pub),
+        message="Ingestion queued",
+    )
+
+
+ObjectStorageDep = Annotated[ObjectStorage, Depends(get_object_storage)]
+
+
+@router.post("/me/publications/upload", response_model=GlobalResponse[dict])
+async def upload_publication_pdf(
+    current_professor: CurrentProfessorDep,
+    session: SessionDep,
+    storage: ObjectStorageDep,
+    file: Annotated[UploadFile, File()],
+    publication_id: Annotated[UUID | None, Form()] = None,
+) -> GlobalResponse:
+    """Upload a PDF to object storage and return its storage_key.
+
+    If `publication_id` is supplied, the key is attached to that publication and
+    ingestion is (re)dispatched — the path for retrying a `needs_upload`/`failed`
+    item. Otherwise the caller includes the returned `storage_key` in a
+    subsequent PUT /me/publications.
+    """
+    settings = get_settings()
+    data = await file.read()
+
+    max_bytes = settings.UPLOAD_MAX_MB * 1024 * 1024
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"PDF exceeds the {settings.UPLOAD_MAX_MB} MB limit",
+        )
+    if not (file.content_type == "application/pdf" or data.startswith(b"%PDF")):
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Only PDF uploads are supported",
+        )
+
+    storage_key = f"publications/{current_professor.id}/{uuid7()}.pdf"
+    await storage.upload(storage_key, data, "application/pdf")
+
+    publication: dict | None = None
+    if publication_id is not None:
+        pub = await session.get(PublicationRecord, publication_id)
+        if pub is None or pub.professor_id != current_professor.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Publication not found"
+            )
+        pub.storage_key = storage_key
+        pub.status = PublicationStatus.PENDING.value
+        pub.indexed = False
+        session.add(pub)
+        await session.commit()
+        await session.refresh(pub)
+        ingest_publication.delay(str(pub.id))
+        publication = _publication_dict(pub)
+
+    return GlobalResponse(
+        data={"storage_key": storage_key, "publication": publication},
+        message="Upload stored",
     )
 
 

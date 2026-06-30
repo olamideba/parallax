@@ -67,3 +67,16 @@
 
   --role-data-font:      var(--font-mono);
 }
+
+/* Scale the serif display steps down on small screens so big headings don't
+   overflow or dominate narrow viewports. Everything references these tokens,
+   so shrinking them here cascades through inline styles too. */
+@media (max-width: 640px) {
+  :root {
+    --text-display-2xl: 2.5rem;   /* 64 → 40 */
+    --text-display-xl:  2.125rem; /* 48 → 34 */
+    --text-display-lg:  1.875rem; /* 36 → 30 */
+    --text-display-md:  1.5rem;   /* 28 → 24 */
+    --text-display-sm:  1.25rem;  /* 22 → 20 */
+  }
+}

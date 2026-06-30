@@ -21,7 +21,7 @@ def get_engine() -> AsyncEngine:
     return _engine
 
 
-def _session_factory() -> sessionmaker:
+def session_factory() -> sessionmaker:
     return sessionmaker(
         bind=get_engine(),
         class_=AsyncSession,
@@ -32,5 +32,5 @@ def _session_factory() -> sessionmaker:
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
-    async with _session_factory()() as session:
+    async with session_factory()() as session:
         yield session

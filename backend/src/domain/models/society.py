@@ -15,6 +15,32 @@ class AgentRole(StrEnum):
     ARBITRATOR = "arbitrator"
 
 
+class ActionKind(StrEnum):
+    """How an agent reached for grounding during a turn.
+
+    - SKILL:     a custom, encapsulated capability (e.g. claim-verification)
+    - MCP:       a call out to an MCP server / tool (e.g. web-search, scholarly-index)
+    - RETRIEVAL: RAG over the professor's own indexed corpus (pgvector)
+    """
+
+    SKILL = "skill"
+    MCP = "mcp"
+    RETRIEVAL = "retrieval"
+
+
+class AgentAction(BaseModel):
+    """A tool/skill/retrieval the agent invoked while producing a turn.
+
+    Recorded so the replay can *show* the engineering depth (custom Skills + MCP
+    integrations) rather than leaving it invisible inside the LLM call.
+    """
+
+    kind: ActionKind
+    name: str
+    detail: str | None = None
+    source: str | None = None  # MCP server id / skill id / index name
+
+
 class Receipt(BaseModel):
     source_title: str
     chunk_text: str
@@ -26,6 +52,7 @@ class DebateTurn(BaseModel):
     role: AgentRole
     content: str
     receipts: list[Receipt] = Field(default_factory=list)
+    actions: list[AgentAction] = Field(default_factory=list)
     references_turn_ids: list[int] = Field(default_factory=list)
     created_at: datetime
 

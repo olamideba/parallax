@@ -10,10 +10,12 @@ import { api, Outreach, ProfessorProfile } from '@/lib/api';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { Tag } from '@/components/Tag';
+import { useIsMobile } from '@/lib/useMediaQuery';
 import { Inbox, LogOut, Users, BookOpen, Settings, ChevronRight, AlertCircle } from 'lucide-react';
 
 export default function InboxPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<ProfessorProfile | null>(null);
   const [displayName, setDisplayName] = useState('');
@@ -133,7 +135,7 @@ export default function InboxPage() {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)' }}>
       {/* Top Header */}
       <header style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' }}>
-        <div style={{ maxWidth: '1120px', margin: '0 auto', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ maxWidth: '1120px', margin: '0 auto', padding: isMobile ? '14px 16px' : '18px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
             style={{
               width: 30, height: 30, borderRadius: '7px',
@@ -181,10 +183,10 @@ export default function InboxPage() {
           width: '100%',
           maxWidth: '1120px',
           margin: '0 auto',
-          padding: '44px 24px 80px',
+          padding: isMobile ? '28px 16px 64px' : '44px 24px 80px',
           display: 'grid',
-          gridTemplateColumns: '1fr 300px',
-          gap: '32px',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 300px',
+          gap: isMobile ? '24px' : '32px',
           boxSizing: 'border-box',
         }}
       >
@@ -224,8 +226,10 @@ export default function InboxPage() {
             style={{
               display: 'flex',
               borderBottom: '1px solid var(--border-subtle)',
-              gap: '24px',
+              gap: isMobile ? '18px' : '24px',
               paddingBottom: '1px',
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
             }}
           >
             {(['pending', 'resolved', 'declined', 'replied'] as const).map((tab) => {
@@ -247,6 +251,8 @@ export default function InboxPage() {
                     paddingBottom: '10px',
                     cursor: 'pointer',
                     transition: 'color var(--duration-fast)',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
                   }}
                 >
                   {label}
@@ -376,11 +382,11 @@ export default function InboxPage() {
                         background: 'var(--surface-card)',
                         border: '1px solid var(--border-subtle)',
                         borderRadius: 'var(--radius-xl)',
-                        padding: '20px 24px',
+                        padding: isMobile ? '16px' : '20px 24px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        gap: '24px',
+                        gap: isMobile ? '12px' : '24px',
                         transition: 'transform var(--duration-fast), box-shadow var(--duration-fast)',
                         cursor: 'pointer',
                       }}
@@ -393,8 +399,8 @@ export default function InboxPage() {
                         e.currentTarget.style.boxShadow = 'none';
                       }}
                     >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                           <span
                             style={{
                               fontFamily: 'var(--font-sans)',
@@ -410,6 +416,7 @@ export default function InboxPage() {
                               fontFamily: 'var(--font-mono)',
                               fontSize: 'var(--text-xs)',
                               color: 'var(--text-muted)',
+                              wordBreak: 'break-all',
                             }}
                           >
                             {item.sender_email}

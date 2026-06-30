@@ -14,6 +14,7 @@ from src.adapters.mcp.server import LocalMcpToolBus
 from src.adapters.qwen_cloud.runtime import QwenLLMClient
 from src.adapters.storage.database import get_session
 from src.adapters.storage.models import ProfessorRecord
+from src.adapters.storage.object_storage import R2ObjectStorage
 from src.adapters.storage.repository_impl import (
     SqlDebateTraceRepository,
     SqlOutreachRepository,
@@ -22,6 +23,7 @@ from src.adapters.storage.repository_impl import (
 from src.application.ports.outbound.email import EmailSender, InboundEmailGateway
 from src.application.ports.outbound.llm_client import LLMClient
 from src.application.ports.outbound.mcp_tool_bus import McpToolBus
+from src.application.ports.outbound.object_storage import ObjectStorage
 from src.application.ports.outbound.repository import (
     DebateTraceRepository,
     OutreachRepository,
@@ -72,6 +74,10 @@ def get_trace_repo(session: SessionDep) -> DebateTraceRepository:
 
 def get_vector_store(session: SessionDep) -> VectorStore:
     return PgVectorStore(session)
+
+
+def get_object_storage() -> ObjectStorage:
+    return R2ObjectStorage()
 
 
 def get_email_sender() -> EmailSender:

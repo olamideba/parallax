@@ -6,6 +6,10 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+html, body { max-width: 100%; overflow-x: hidden; }
+
+img, video { max-width: 100%; height: auto; }
+
 :root {
   --background: var(--surface-ground);
   --foreground: var(--text-body);

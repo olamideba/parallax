@@ -8,7 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from src.application.ports.outbound.email import EmailSender
-from src.application.ports.outbound.repository import OutreachRepository
+from src.application.ports.outbound.repository import (
+    DebateTraceRepository,
+    OutreachRepository,
+)
 from src.domain.models.outreach import (
     SYSTEM_CONFIRMATION_CHANNEL,
     Decision,
@@ -20,6 +23,7 @@ from src.entrypoints.api.dependencies import (
     CurrentProfessorDep,
     get_email_sender,
     get_outreach_repo,
+    get_trace_repo,
 )
 from src.entrypoints.api.schemas import GlobalResponse
 
@@ -27,6 +31,7 @@ router = APIRouter(prefix="/reviews", tags=["reviews"])
 
 OutreachRepoDep = Annotated[OutreachRepository, Depends(get_outreach_repo)]
 EmailSenderDep = Annotated[EmailSender, Depends(get_email_sender)]
+TraceRepoDep = Annotated[DebateTraceRepository, Depends(get_trace_repo)]
 
 
 class OverrideRequest(BaseModel):
@@ -78,6 +83,29 @@ async def get_review_detail(
     if not outreach or outreach.professor_id != current_professor.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
     return GlobalResponse(data=outreach.model_dump(mode="json"), message="OK")
+
+
+@router.get("/{outreach_id}/debate", response_model=GlobalResponse[dict])
+async def get_debate_trace(
+    outreach_id: UUID,
+    current_professor: CurrentProfessorDep,
+    outreach_repo: OutreachRepoDep,
+    trace_repo: TraceRepoDep,
+) -> GlobalResponse:
+    """Return the full debate trace (turns, receipts, cross-references) for the
+    replay surface. The trace is the centrepiece of the outreach-detail flow (§5.4):
+    the professor reconstructs *why* a decision was made by replaying it."""
+    outreach = await outreach_repo.get_by_id(outreach_id)
+    if not outreach or outreach.professor_id != current_professor.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
+
+    trace = await trace_repo.get_by_outreach_id(outreach_id)
+    if not trace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No debate trace for this outreach yet",
+        )
+    return GlobalResponse(data=trace.model_dump(mode="json"), message="OK")
 
 
 @router.post("/{outreach_id}/approve", response_model=GlobalResponse[dict])

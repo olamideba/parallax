@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from uuid import UUID
 
 from src.domain.models.outreach import Outreach, TriageVerdict
-from src.domain.models.professor import Professor
+from src.domain.models.professor import Professor, Publication
 from src.domain.models.society import DebateTrace
 
 
@@ -53,4 +53,19 @@ class DebateTraceRepository(ABC):
 
     @abstractmethod
     async def get_by_outreach_id(self, outreach_id: UUID) -> DebateTrace | None:
+        raise NotImplementedError
+
+
+class PublicationRepository(ABC):
+    @abstractmethod
+    async def get(self, publication_id: UUID) -> Publication | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def save(self, publication: Publication) -> Publication:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def clear_chunks(self, publication_id: UUID) -> None:
+        """Remove all indexed chunks for a publication (idempotent re-indexing)."""
         raise NotImplementedError

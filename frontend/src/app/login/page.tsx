@@ -8,10 +8,12 @@ import { supabase } from '@/lib/supabase';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
+import { useIsMobile } from '@/lib/useMediaQuery';
 import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
@@ -54,26 +56,27 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh', width: '100%' }}>
       {/* Left Column: Navy Duality Brand Panel */}
       <div
         style={{
-          flex: 1,
+          flex: isMobile ? 'none' : 1,
           background: 'var(--navy-900)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
-          padding: '40px',
+          padding: isMobile ? '28px 24px' : '40px',
           color: 'var(--white)',
           textAlign: 'center',
-          borderRight: '1px solid var(--border-inverse)',
+          borderRight: isMobile ? 'none' : '1px solid var(--border-inverse)',
+          borderBottom: isMobile ? '1px solid var(--border-inverse)' : 'none',
         }}
       >
-        <div style={{ maxWidth: '460px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '28px' }}>
-          <Logo variant="on-dark" size={120} />
+        <div style={{ maxWidth: '460px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? '14px' : '28px' }}>
+          <Logo variant="on-dark" size={isMobile ? 56 : 120} />
           <div>
-            <Wordmark variant="inverse" size={24} />
+            <Wordmark variant="inverse" size={isMobile ? 20 : 24} />
             <p
               style={{
                 fontFamily: 'var(--font-mono)',
@@ -87,19 +90,21 @@ export default function LoginPage() {
               Graduate admissions review
             </p>
           </div>
-          <p
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 'var(--text-lg)',
-              fontStyle: 'italic',
-              fontWeight: 300,
-              color: 'var(--text-body-inverse)',
-              lineHeight: 'var(--leading-relaxed)',
-              marginTop: '16px',
-            }}
-          >
-            "A society of agents, debating candidate outreach against the ground truth of your research and capacity."
-          </p>
+          {!isMobile && (
+            <p
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--text-lg)',
+                fontStyle: 'italic',
+                fontWeight: 300,
+                color: 'var(--text-body-inverse)',
+                lineHeight: 'var(--leading-relaxed)',
+                marginTop: '16px',
+              }}
+            >
+              "A society of agents, debating candidate outreach against the ground truth of your research and capacity."
+            </p>
+          )}
         </div>
       </div>
 
@@ -112,7 +117,7 @@ export default function LoginPage() {
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
-          padding: '40px',
+          padding: isMobile ? '40px 24px' : '40px',
         }}
       >
         <div style={{ width: '100%', maxWidth: '400px' }}>

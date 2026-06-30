@@ -5,18 +5,18 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { api, PublicationInput } from '@/lib/api';
+import { api, PublicationInput, PublicationStatus } from '@/lib/api';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Checkbox } from '@/components/Checkbox';
 import { Tag } from '@/components/Tag';
-import { 
-  Check, 
+import { useIsMobile } from '@/lib/useMediaQuery';
+import {
+  Check,
   CheckCircle, 
-  AlertTriangle, 
-  Link as LinkIcon, 
-  Loader, 
+  AlertTriangle,
+  Loader,
   ArrowLeft, 
   ArrowRight, 
   Upload, 
@@ -28,12 +28,22 @@ import {
 
 interface Paper {
   id: number;
+  backendId: string | null;    // set after PUT returns
+  storageKey: string | null;   // set after PDF upload
   t: string;
   v: string;
   cites: number;
   state: 'resolving' | 'indexed' | 'paywalled' | 'failed';
   doi: string;
 }
+
+const statusToState = (s: PublicationStatus): Paper['state'] => ({
+  pending:      'resolving',
+  indexing:     'resolving',
+  indexed:      'indexed',
+  needs_upload: 'paywalled',
+  failed:       'failed',
+} as Record<PublicationStatus, Paper['state']>)[s] ?? 'failed';
 
 // ── Stepper Component ──
 interface StepperProps {
@@ -42,12 +52,15 @@ interface StepperProps {
 }
 
 function Stepper({ step, steps }: StepperProps) {
+  const isMobile = useIsMobile();
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '36px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: isMobile ? '28px' : '36px' }}>
       {steps.flatMap((s, i) => {
         const state = i < step ? 'done' : i === step ? 'current' : 'todo';
+        // On mobile, only the active step keeps its text label so the rail fits.
+        const showLabel = !isMobile || state === 'current';
         const node = (
-          <div key={'s' + i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div key={'s' + i} style={{ display: 'flex', alignItems: 'center', gap: showLabel ? '10px' : 0 }}>
             <span
               style={{
                 width: 26, height: 26, borderRadius: '999px', flexShrink: 0,
@@ -60,20 +73,22 @@ function Stepper({ step, steps }: StepperProps) {
             >
               {state === 'done' ? <Check size={14} color="var(--white)" /> : String(i + 1)}
             </span>
-            <span
-              style={{
-                fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
-                fontWeight: state === 'current' ? 600 : 500,
-                color: state === 'todo' ? 'var(--text-subtle)' : 'var(--text-strong)',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {s}
-            </span>
+            {showLabel && (
+              <span
+                style={{
+                  fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
+                  fontWeight: state === 'current' ? 600 : 500,
+                  color: state === 'todo' ? 'var(--text-subtle)' : 'var(--text-strong)',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {s}
+              </span>
+            )}
           </div>
         );
         const conn = i < steps.length - 1 ? (
-          <div key={'c' + i} style={{ flex: 1, height: 1, background: 'var(--border-default)', margin: '0 14px', minWidth: 24 }} />
+          <div key={'c' + i} style={{ flex: 1, height: 1, background: 'var(--border-default)', margin: isMobile ? '0 8px' : '0 14px', minWidth: isMobile ? 12 : 24 }} />
         ) : null;
         return conn ? [node, conn] : [node];
       })}
@@ -86,7 +101,7 @@ function ResolutionPill({ state }: { state: Paper['state'] }) {
   const configs = {
     resolving: { label: 'Resolving…', color: 'var(--status-pending-ink)', bg: 'var(--status-pending-bg)', icon: <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> },
     indexed:   { label: 'Indexed',    color: 'var(--status-verified-ink)', bg: 'var(--status-verified-bg)', icon: <CheckCircle size={13} /> },
-    paywalled: { label: 'Upload PDF', color: 'var(--agent-3-ink)', bg: 'var(--agent-3-bg)', icon: <Lock size={13} /> },
+    paywalled: { label: 'Needs PDF',  color: 'var(--agent-3-ink)', bg: 'var(--agent-3-bg)', icon: <Lock size={13} /> },
     failed:    { label: 'Not found',  color: 'var(--status-refuted-ink)',  bg: 'var(--status-refuted-bg)',  icon: <XCircle size={13} /> },
   };
   const cfg = configs[state] || { label: state, color: 'var(--text-muted)', bg: 'var(--surface-muted)', icon: null };
@@ -113,16 +128,16 @@ function ResolutionPill({ state }: { state: Paper['state'] }) {
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
 
   const STEPS = ['Publications', 'Lab capacity', 'Email forwarding', 'Review'];
   const [step, setStep] = useState(0);
 
   /* — Publications state — */
   const [doiText, setDoiText] = useState('');
-  const [orcidVal, setOrcidVal] = useState('');
-  const [orcidImported, setOrcidImported] = useState(false);
-  const [resolving, setResolving] = useState(false);
   const [papers, setPapers] = useState<Paper[]>([]);
+  const [dropError, setDropError] = useState<string | null>(null);
+  const [retryErrors, setRetryErrors] = useState<Record<number, string>>({});
 
   /* — Lab capacity state — */
   const [slots, setSlots] = useState(3);
@@ -196,87 +211,143 @@ export default function OnboardingPage() {
       if (pubs && pubs.length > 0) {
         setPapers(pubs.map((p, idx) => ({
           id: idx + 1,
-          t: p.title,
+          backendId: p.id,
+          storageKey: p.storage_key,
+          t: p.title ?? '—',
           v: '—',
           cites: 0,
-          state: p.indexed ? 'indexed' : 'paywalled',
-          doi: p.doi || p.url || '',
+          state: statusToState(p.status),
+          doi: p.doi ?? p.url ?? '',
         })));
-      } else {
-        // Fallback demo papers if none saved yet
-        setPapers([
-          { id: 1, t: 'Sparse-attention kernels for long sequences', v: 'ICML 2023', cites: 142, state: 'indexed', doi: '10.5555/1234' },
-          { id: 2, t: 'Implicit regularisation in attention', v: 'NeurIPS 2022', cites: 88, state: 'indexed', doi: '10.5555/5678' },
-          { id: 3, t: 'Retrieval-augmented reasoning at scale', v: 'ACL 2024', cites: 37, state: 'indexed', doi: '10.5555/9012' },
-          { id: 4, t: 'Efficient transformers: a survey', v: 'TMLR 2023', cites: 261, state: 'paywalled', doi: '10.5555/3456' },
-          { id: 5, t: 'Low-rank adaptation of large models', v: 'ICLR 2023', cites: 19, state: 'failed', doi: '10.5555/7890' },
-        ]);
       }
+      // If no publications yet, start with empty list (user will add via drop zone or DOI)
     } catch (err) {
-      console.warn("Failed to load onboarding info from backend, falling back to defaults:", err);
-      setPapers([
-        { id: 1, t: 'Sparse-attention kernels for long sequences', v: 'ICML 2023', cites: 142, state: 'indexed', doi: '10.5555/1234' },
-        { id: 2, t: 'Implicit regularisation in attention', v: 'NeurIPS 2022', cites: 88, state: 'indexed', doi: '10.5555/5678' },
-        { id: 3, t: 'Retrieval-augmented reasoning at scale', v: 'ACL 2024', cites: 37, state: 'indexed', doi: '10.5555/9012' },
-        { id: 4, t: 'Efficient transformers: a survey', v: 'TMLR 2023', cites: 261, state: 'paywalled', doi: '10.5555/3456' },
-        { id: 5, t: 'Low-rank adaptation of large models', v: 'ICLR 2023', cites: 19, state: 'failed', doi: '10.5555/7890' },
-      ]);
+      console.warn('Failed to load onboarding info from backend:', err);
     }
   };
 
-  const handleOrcidImport = () => {
-    if (!orcidVal.trim()) return;
-    setResolving(true);
-    setTimeout(() => {
-      setOrcidImported(true);
-      setResolving(false);
-      // Mock import papers from ORCID
-      const orcidPapers: Paper[] = [
-        { id: Date.now() + 1, t: 'Verified Research via ORCID integration', v: 'Nature Machine Intelligence 2024', cites: 12, state: 'indexed', doi: '10.1038/s42256-024-001' },
-        { id: Date.now() + 2, t: 'Adaptive Attention Architectures', v: 'JMLR 2023', cites: 45, state: 'indexed', doi: '10.5555/orcid-2' }
-      ];
-      setPapers(prev => [...orcidPapers, ...prev]);
-    }, 1200);
+  const handleResolve = async () => {
+    if (!doiText.trim()) return;
+    const lines = doiText.trim().split(/\n+/).map(l => l.trim()).filter(Boolean);
+    setDoiText('');
+
+    // Add optimistic entries immediately so the user sees activity
+    const tempIds = lines.map((_, i) => Date.now() + i);
+    const optimistic: Paper[] = lines.map((line, i) => ({
+      id: tempIds[i],
+      backendId: null,
+      storageKey: null,
+      t: line.slice(0, 60) + (line.length > 60 ? '…' : ''),
+      v: '—', cites: 0, state: 'resolving' as const, doi: line,
+    }));
+    setPapers(p => [...p, ...optimistic]);
+
+    const payloads = lines.map(line => {
+      const isUrl = line.startsWith('http://') || line.startsWith('https://');
+      return {
+        title: null,
+        doi: isUrl ? null : line,
+        url: isUrl ? line : null,
+        storage_key: null,
+      };
+    });
+
+    try {
+      const created = await api.addPublications(payloads);
+      setPapers(prev => prev.map(p => {
+        const idx = tempIds.indexOf(p.id);
+        if (idx === -1) return p;
+        const pub = created[idx];
+        return { ...p, backendId: pub.id, storageKey: pub.storage_key, t: pub.title ?? p.t, state: statusToState(pub.status) };
+      }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to add publications';
+      setPapers(prev => prev.map(p =>
+        tempIds.includes(p.id) ? { ...p, state: 'failed' as const } : p
+      ));
+      setDropError(msg);
+    }
   };
 
-  const handleResolve = () => {
-    if (!doiText.trim()) return;
-    const lines = doiText.trim().split(/\n+/).filter(Boolean).slice(0, 3);
-    const newPapers: Paper[] = lines.map((line, i) => ({
-      id: Date.now() + i,
-      t: 'Resolving: ' + line.slice(0, 48) + (line.length > 48 ? '…' : ''),
-      v: '—', cites: 0, state: 'resolving', doi: line,
-    }));
-    setPapers(p => [...p, ...newPapers]);
-    setDoiText('');
-    setTimeout(() => {
-      setPapers(p => p.map(pp =>
-        pp.state === 'resolving'
-          ? { ...pp, state: 'indexed', t: 'Resolved paper from ' + pp.doi.slice(0, 30), v: '2024', cites: 0 }
-          : pp
-      ));
-    }, 1600);
+  // PDF drop zone: upload each file immediately, add as resolving paper
+  const handlePdfFiles = async (files: File[]) => {
+    setDropError(null);
+    for (const file of files) {
+      if (!file.name.toLowerCase().endsWith('.pdf')) {
+        setDropError('Only PDF files are supported');
+        continue;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        setDropError('File exceeds 25 MB limit');
+        continue;
+      }
+      const newId = Date.now() + Math.random();
+      const placeholder: Paper = {
+        id: newId,
+        backendId: null,
+        storageKey: null,
+        t: file.name.replace(/\.pdf$/i, ''),
+        v: '—', cites: 0, state: 'resolving', doi: '',
+      };
+      setPapers(p => [...p, placeholder]);
+      try {
+        const { storage_key } = await api.uploadPublicationPdf(file);
+        setPapers(p => p.map(pp =>
+          pp.id === newId ? { ...pp, storageKey: storage_key } : pp
+        ));
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Upload failed';
+        if (msg.includes('25 MB') || msg.includes('413')) {
+          setDropError('File exceeds 25 MB limit');
+        } else if (msg.includes('415') || msg.includes('PDF')) {
+          setDropError('Only PDF files are supported');
+        } else {
+          setDropError(msg);
+        }
+        setPapers(p => p.filter(pp => pp.id !== newId));
+      }
+    }
+  };
+
+  // needs_upload: file picker → uploadPublicationPdf(file, id)
+  const handleRetryUpload = async (paper: Paper, file: File) => {
+    if (!paper.backendId) return;
+    setRetryErrors(e => ({ ...e, [paper.id]: '' }));
+    setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'resolving' } : p));
+    try {
+      await api.uploadPublicationPdf(file, paper.backendId);
+      // Polling loop will pick up the new status
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'needs_upload' as Paper['state'] } : p));
+      setRetryErrors(e => ({ ...e, [paper.id]: msg }));
+    }
+  };
+
+  // failed: no file picker — PDF already in R2, just re-trigger ingestion
+  const handleReingest = async (paper: Paper) => {
+    if (!paper.backendId) return;
+    setRetryErrors(e => ({ ...e, [paper.id]: '' }));
+    setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'resolving' } : p));
+    try {
+      await api.reingestPublication(paper.backendId);
+      // Polling loop will pick up the new status
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Retry failed';
+      setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'failed' } : p));
+      setRetryErrors(e => ({ ...e, [paper.id]: msg }));
+    }
   };
 
   const handleFinishSetup = async () => {
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // 1. Prepare publications list
-      const payloadPubs: PublicationInput[] = papers.map(p => {
-        const isUrl = p.doi?.startsWith('http://') || p.doi?.startsWith('https://');
-        return {
-          title: p.t,
-          doi: isUrl ? null : (p.doi || null),
-          url: isUrl ? p.doi : null,
-        };
-      });
 
-      // 2. Prepare profile list
+      // Publications are already saved individually as the user adds them.
+      // Just persist the profile.
       const budgetAmountInt = parseInt(fundingAmount.replace(/,/g, '')) || null;
-      
-      const payloadProfile = {
+      await api.patchProfessorProfile({
         open_slots: slots,
         students_committed: committed,
         budget_amount: budgetAmountInt,
@@ -284,14 +355,9 @@ export default function OnboardingPage() {
         recruiting_topics: areas,
         auto_resolve_declines: autoDecline,
         hold_when_at_capacity: holdAtCapacity,
-      };
-
-      // 3. Save sequentially to backend
-      await api.putPublications(payloadPubs);
-      await api.patchProfessorProfile(payloadProfile);
+      });
 
       if (user) {
-        // Also persist onboarding completeness locally for fast routing
         localStorage.setItem(`onboarding_completed_${user.id}`, 'true');
       }
 
@@ -302,6 +368,31 @@ export default function OnboardingPage() {
     }
   };
 
+  // Poll while any paper is still resolving
+  useEffect(() => {
+    const hasLive = papers.some(p => p.state === 'resolving');
+    if (!hasLive) return;
+    const t = setInterval(async () => {
+      try {
+        const pubs = await api.getPublications();
+        setPapers(prev => prev.map(p => {
+          if (!p.backendId) return p;
+          const fresh = pubs.find(q => q.id === p.backendId);
+          if (!fresh) return p;
+          return {
+            ...p,
+            t: fresh.title ?? p.t,
+            state: statusToState(fresh.status),
+            storageKey: fresh.storage_key ?? p.storageKey,
+          };
+        }));
+      } catch {
+        // Silently ignore polling errors
+      }
+    }, 9000);
+    return () => clearInterval(t);
+  }, [papers]);
+
   /* ── helper layout wrappers ── */
   const cardWrap = (children: React.ReactNode) => (
     <div
@@ -310,7 +401,7 @@ export default function OnboardingPage() {
         border: '1px solid var(--border-subtle)',
         borderRadius: 'var(--radius-xl)',
         boxShadow: 'var(--shadow-md)',
-        padding: '36px 40px'
+        padding: isMobile ? '24px 20px' : '36px 40px'
       }}
     >
       {children}
@@ -376,41 +467,64 @@ export default function OnboardingPage() {
       <>
         {monoHeader('Step 1 of 3')}
         {h2Title('Connect your published work')}
-        {subDescription('Parallax grounds every debate in your own research. Import via ORCID or paste a batch of DOIs and URLs — the system fetches full text where open-access and prompts you to upload PDFs for anything paywalled.')}
+        {subDescription('Parallax grounds every debate in your own research. Upload your paper PDFs to add them directly — the fastest, most reliable way to index your work. You can also paste DOIs or arXiv URLs below, and the system fetches full text where open-access and prompts you to upload PDFs for anything paywalled.')}
 
-        {/* ORCID row */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <Input
-            label="ORCID iD"
-            placeholder="0000-0002-1825-0097"
-            value={orcidVal}
-            onChange={e => setOrcidVal(e.target.value)}
-            leadingIcon={<LinkIcon size={16} style={{ color: 'var(--text-subtle)' }} />}
-            containerStyle={{ flex: 1, minWidth: '220px' }}
-          />
-          <Button
-            variant="primary"
-            onClick={handleOrcidImport}
-            disabled={resolving || !orcidVal.trim()}
-            leadingIcon={resolving ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+        {/* PDF drop zone — primary input */}
+        <div
+          style={{ border: '2px dashed var(--border-default)', borderRadius: 'var(--radius-xl)', padding: '36px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', textAlign: 'center', background: 'var(--surface-sunken)', color: 'var(--text-muted)', marginBottom: dropError ? '8px' : '24px', cursor: 'pointer', position: 'relative' }}
+          onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+          onDrop={e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const files = Array.from(e.dataTransfer.files);
+            handlePdfFiles(files);
+          }}
+          onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.pdf';
+            input.multiple = true;
+            input.onchange = () => {
+              if (input.files) handlePdfFiles(Array.from(input.files));
+            };
+            input.click();
+          }}
+        >
+          <div
+            style={{
+              width: 44, height: 44, borderRadius: '999px', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--surface-card)', border: '1px solid var(--border-subtle)',
+            }}
           >
-            {orcidImported ? 'Re-import from ORCID' : 'Import from ORCID'}
-          </Button>
+            <Upload size={20} style={{ color: 'var(--navy-900)' }} />
+          </div>
+          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Drop PDFs here to add papers directly
+          </span>
+          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-subtle)' }}>
+            The fastest way to index your work — drag and drop one or more paper PDFs.
+          </span>
         </div>
+        {dropError && (
+          <div style={{ marginBottom: '16px', fontFamily: 'var(--font-sans)', fontSize: '12px', color: 'var(--status-refuted-ink)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <XCircle size={13} />{dropError}
+          </div>
+        )}
 
         {/* Divider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-subtle)', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase' }}>
-            or paste manually
+            or add by DOI / URL
           </span>
           <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
         </div>
 
-        {/* DOI / URL textarea */}
+        {/* DOI / arXiv URL textarea — secondary input */}
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '6px' }}>
-            DOIs or paper URLs
+            DOIs or arXiv URLs
           </label>
           <textarea
             value={doiText}
@@ -426,22 +540,12 @@ export default function OnboardingPage() {
           />
           <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
             <span style={{ fontFamily: 'var(--font-sans)', fontSize: '12px', color: 'var(--text-subtle)' }}>
-              One DOI or URL per line. Paywalled papers will prompt for PDF upload.
+              One DOI or arXiv URL per line. Paywalled papers will prompt for PDF upload.
             </span>
             <Button variant="secondary" onClick={handleResolve} disabled={!doiText.trim()} style={{ flexShrink: 0 }}>
               Resolve & index
             </Button>
           </div>
-        </div>
-
-        {/* PDF drop zone */}
-        <div
-          style={{ border: '1px dashed var(--border-default)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-muted)', marginBottom: '24px', cursor: 'pointer' }}
-        >
-          <Upload size={16} style={{ color: 'var(--text-subtle)' }} />
-          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
-            Drop PDFs here to add papers directly
-          </span>
         </div>
 
         {/* Paper list */}
@@ -477,10 +581,48 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                   <ResolutionPill state={p.state} />
-                  {p.state === 'paywalled' && (
-                    <Button variant="ghost" style={{ padding: '4px 10px', fontSize: '12px' }}>
-                      Upload PDF
-                    </Button>
+                  {/* needs_upload: file picker */}
+                  {p.state === 'paywalled' && p.backendId && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        style={{ padding: '4px 10px', fontSize: '12px' }}
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = '.pdf';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) handleRetryUpload(p, file);
+                          };
+                          input.click();
+                        }}
+                      >
+                        Upload PDF
+                      </Button>
+                      {retryErrors[p.id] && (
+                        <span style={{ fontSize: '11px', color: 'var(--status-refuted-ink)' }}>
+                          {retryErrors[p.id]}
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {/* failed: no file picker — reingest directly */}
+                  {p.state === 'failed' && p.backendId && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        style={{ padding: '4px 10px', fontSize: '12px' }}
+                        onClick={() => handleReingest(p)}
+                      >
+                        Retry
+                      </Button>
+                      {retryErrors[p.id] && (
+                        <span style={{ fontSize: '11px', color: 'var(--status-refuted-ink)' }}>
+                          {retryErrors[p.id]}
+                        </span>
+                      )}
+                    </>
                   )}
                   <button
                     onClick={() => setPapers(pp => pp.filter(x => x.id !== p.id))}
@@ -559,7 +701,7 @@ export default function OnboardingPage() {
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 14px', maxWidth: '56ch' }}>
             Declared by you, never inferred about the applicant. Used to assess feasibility — not shown to candidates.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px' }}>
             <div>
               <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '6px' }}>
                 Available budget
@@ -769,7 +911,7 @@ export default function OnboardingPage() {
         {subDescription('This is the ground truth every debate is measured against. You can update it any time from your lab profile — edits re-index and apply to subsequent outreach.')}
 
         {/* Top stat row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '14px', marginBottom: '16px' }}>
           {[
             { lbl: 'Publications indexed', val: indexed + ' of ' + papers.length },
             { lbl: 'Effective open slots', val: effectiveSlots },
@@ -857,7 +999,7 @@ export default function OnboardingPage() {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)' }}>
       {/* Top Bar Header */}
       <header style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ maxWidth: 760, margin: '0 auto', padding: isMobile ? '14px 16px' : '18px 24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             style={{
               width: 30, height: 30, borderRadius: '7px',
@@ -877,7 +1019,7 @@ export default function OnboardingPage() {
       </header>
 
       {/* Main Content container */}
-      <div style={{ flex: 1, width: '100%', maxWidth: 760, margin: '0 auto', padding: '44px 24px 80px', boxSizing: 'border-box' }}>
+      <div style={{ flex: 1, width: '100%', maxWidth: 760, margin: '0 auto', padding: isMobile ? '28px 16px 64px' : '44px 24px 80px', boxSizing: 'border-box' }}>
         <Stepper step={step} steps={STEPS} />
         {body}
 

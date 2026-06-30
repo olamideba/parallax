@@ -30,6 +30,48 @@ export interface Decision {
   overridden_by_professor: boolean;
 }
 
+// ── Debate trace (the replay surface) ───────────────────────────────────────
+// Mirrors backend/src/domain/models/society.py
+export type AgentRole = 'gatekeeper' | 'advocate' | 'auditor' | 'assessor' | 'arbitrator';
+
+export interface Receipt {
+  source_title: string;
+  chunk_text: string;
+  relevance_note: string | null;
+}
+
+// How an agent reached for grounding during a turn (skill / MCP / RAG).
+// Surfaced in the replay as tool chips so the engineering depth is visible.
+export type ActionKind = 'skill' | 'mcp' | 'retrieval';
+
+export interface AgentAction {
+  kind: ActionKind;
+  name: string;
+  detail: string | null;
+  source: string | null;   // MCP server id / skill id / index name
+}
+
+export interface DebateTurn {
+  round: number;
+  role: AgentRole;
+  content: string;
+  receipts: Receipt[];
+  actions: AgentAction[];
+  references_turn_ids: number[];   // indices of earlier turns this one builds on
+  created_at: string;              // ISO timestamp
+}
+
+export interface DebateTrace {
+  id: string;
+  outreach_id: string;
+  professor_id: string;
+  turns: DebateTurn[];
+  round_cap: number;
+  terminated_at_round: number | null;
+  started_at: string;
+  ended_at: string | null;
+}
+
 export interface Outreach {
   id: string;
   professor_id: string;
@@ -66,24 +108,37 @@ export interface ProfessorProfile {
   hold_when_at_capacity: boolean;
 }
 
+export type PublicationStatus =
+  | 'pending'       // queued, not yet picked up
+  | 'indexing'      // Celery task running
+  | 'indexed'       // text embedded in pgvector, ready for debate
+  | 'needs_upload'  // DOI was paywalled, no OA PDF found
+  | 'failed';       // ingestion error
+
 export interface Publication {
   id: string;
-  title: string;
+  title: string | null;
   doi: string | null;
   url: string | null;
   indexed: boolean;
+  status: PublicationStatus;   // authoritative field
   storage_key: string | null;
 }
 
 export interface PublicationInput {
-  title: string;
+  title: string | null;
   doi: string | null;
   url: string | null;
+  storage_key: string | null;  // set after uploadPublicationPdf
+}
+
+export async function getAuthToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
 }
 
 async function getAuthHeaders(): Promise<HeadersInit> {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  const token = await getAuthToken();
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -135,10 +190,59 @@ export const api = {
 
   getPublications: () => apiFetch<Publication[]>('/professors/me/publications'),
 
-  putPublications: (payload: PublicationInput[]) => 
+  putPublications: (payload: PublicationInput[]) =>
     apiFetch<Publication[]>('/professors/me/publications', {
       method: 'PUT',
       body: JSON.stringify(payload),
+    }),
+
+  uploadPublicationPdf: async (
+    file: File,
+    publicationId?: string,
+  ): Promise<{ storage_key: string; publication: Publication | null }> => {
+    const token = await getAuthToken();
+    const form = new FormData();
+    form.append('file', file);
+    if (publicationId) form.append('publication_id', publicationId);
+
+    const res = await fetch(`${API_BASE}/api/v1/professors/me/publications/upload`, {
+      method: 'POST',
+      // Do NOT set Content-Type — the browser sets it with the multipart boundary
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { detail?: string }).detail || `Upload failed (${res.status})`);
+    }
+    const envelope = (await res.json()) as GlobalResponse<{
+      storage_key: string;
+      publication: Publication | null;
+    }>;
+    if (!envelope.success) throw new Error(envelope.message);
+    return envelope.data;
+  },
+
+  addPublication: (payload: PublicationInput) =>
+    apiFetch<Publication>('/professors/me/publications', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  addPublications: (payloads: PublicationInput[]) =>
+    Promise.all(
+      payloads.map((p) =>
+        apiFetch<Publication>('/professors/me/publications', {
+          method: 'POST',
+          body: JSON.stringify(p),
+        })
+      )
+    ),
+
+  reingestPublication: (publicationId: string) =>
+    apiFetch<Publication>(`/professors/me/publications/${publicationId}/ingest`, {
+      method: 'POST',
     }),
   
   getReviewsQueue: (verdict?: 'promote' | 'reject') => {
@@ -147,6 +251,8 @@ export const api = {
   },
   
   getReviewDetail: (id: string) => apiFetch<Outreach>(`/reviews/${id}`),
+
+  getDebateTrace: (id: string) => apiFetch<DebateTrace>(`/reviews/${id}/debate`),
   
   approveDecision: (id: string) => apiFetch<Outreach>(`/reviews/${id}/approve`, {
     method: 'POST',
