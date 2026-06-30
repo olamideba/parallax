@@ -21,6 +21,7 @@ from src.application.ports.outbound.repository import (
 )
 from src.domain.models.outreach import (
     SYSTEM_CONFIRMATION_CHANNEL,
+    Attachment,
     Decision,
     DecisionLabel,
     ExtractedClaim,
@@ -38,6 +39,19 @@ from src.domain.models.professor import (
 from src.domain.models.society import DebateTrace, DebateTurn
 
 # --- Outreach mapping ---
+
+def _deserialize_attachments(raw: str) -> list[Attachment]:
+    """Parse the JSON attachment column, tolerating legacy plain-string keys
+    (rows written before attachments carried filenames / R2 keys)."""
+    items = json.loads(raw)
+    attachments: list[Attachment] = []
+    for item in items:
+        if isinstance(item, str):
+            attachments.append(Attachment(storage_key=item, filename=item))
+        else:
+            attachments.append(Attachment.model_validate(item))
+    return attachments
+
 
 def _record_to_outreach(r: OutreachRecord) -> Outreach:
     decision = None
@@ -57,7 +71,7 @@ def _record_to_outreach(r: OutreachRecord) -> Outreach:
         subject=r.subject,
         body=r.body,
         body_html=r.body_html,
-        attachment_keys=json.loads(r.attachment_keys),
+        attachment_keys=_deserialize_attachments(r.attachment_keys),
         received_at=r.received_at,
         status=OutreachStatus(r.status),
         replied_at=r.replied_at,
@@ -87,7 +101,7 @@ def _outreach_to_record(o: Outreach) -> OutreachRecord:
         subject=o.subject,
         body=o.body,
         body_html=o.body_html,
-        attachment_keys=json.dumps(o.attachment_keys),
+        attachment_keys=json.dumps([a.model_dump() for a in o.attachment_keys]),
         received_at=o.received_at,
         status=o.status.value,
         replied_at=o.replied_at,

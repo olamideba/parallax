@@ -28,6 +28,14 @@ class DecisionLabel(StrEnum):
     DECLINE = "decline"
 
 
+class Attachment(BaseModel):
+    """An outreach attachment persisted to object storage (e.g. a candidate CV)."""
+
+    storage_key: str
+    filename: str
+    content_type: str | None = None
+
+
 class ExtractedClaim(BaseModel):
     text: str
     verified: bool | None = None
@@ -59,7 +67,7 @@ class Outreach(BaseModel):
     subject: str | None = None
     body: str
     body_html: str | None = None
-    attachment_keys: list[str] = Field(default_factory=list)
+    attachment_keys: list[Attachment] = Field(default_factory=list)
     received_at: datetime
     status: OutreachStatus = OutreachStatus.PENDING_TRIAGE
     replied_at: datetime | None = None

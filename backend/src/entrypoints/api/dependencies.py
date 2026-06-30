@@ -91,8 +91,12 @@ def get_inbound_gateway() -> InboundEmailGateway:
 def get_process_inbound_email_use_case(
     outreach_repo: Annotated[OutreachRepository, Depends(get_outreach_repo)],
     professor_repo: Annotated[ProfessorRepository, Depends(get_professor_repo)],
+    inbound_gateway: Annotated[InboundEmailGateway, Depends(get_inbound_gateway)],
+    object_storage: Annotated[ObjectStorage, Depends(get_object_storage)],
 ) -> ProcessInboundEmailUseCase:
-    return ProcessInboundEmailUseCase(outreach_repo, professor_repo)
+    return ProcessInboundEmailUseCase(
+        outreach_repo, professor_repo, inbound_gateway, object_storage
+    )
 
 
 def get_process_ingestion_use_case(
