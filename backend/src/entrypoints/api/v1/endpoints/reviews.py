@@ -5,9 +5,11 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from src.application.ports.outbound.email import EmailSender
+from src.application.ports.outbound.object_storage import ObjectStorage
 from src.application.ports.outbound.repository import (
     DebateTraceRepository,
     OutreachRepository,
@@ -22,6 +24,7 @@ from src.domain.models.outreach import (
 from src.entrypoints.api.dependencies import (
     CurrentProfessorDep,
     get_email_sender,
+    get_object_storage,
     get_outreach_repo,
     get_trace_repo,
 )
@@ -32,6 +35,7 @@ router = APIRouter(prefix="/reviews", tags=["reviews"])
 OutreachRepoDep = Annotated[OutreachRepository, Depends(get_outreach_repo)]
 EmailSenderDep = Annotated[EmailSender, Depends(get_email_sender)]
 TraceRepoDep = Annotated[DebateTraceRepository, Depends(get_trace_repo)]
+ObjectStorageDep = Annotated[ObjectStorage, Depends(get_object_storage)]
 
 
 class OverrideRequest(BaseModel):
@@ -83,6 +87,30 @@ async def get_review_detail(
     if not outreach or outreach.professor_id != current_professor.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
     return GlobalResponse(data=outreach.model_dump(mode="json"), message="OK")
+
+
+@router.get("/{outreach_id}/attachments/{index}")
+async def download_attachment(
+    outreach_id: UUID,
+    index: int,
+    current_professor: CurrentProfessorDep,
+    outreach_repo: OutreachRepoDep,
+    object_storage: ObjectStorageDep,
+) -> Response:
+    """Stream a stored outreach attachment (e.g. a candidate CV) from object storage."""
+    outreach = await outreach_repo.get_by_id(outreach_id)
+    if not outreach or outreach.professor_id != current_professor.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
+    if index < 0 or index >= len(outreach.attachment_keys):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+    attachment = outreach.attachment_keys[index]
+    data = await object_storage.download(attachment.storage_key)
+    return Response(
+        content=data,
+        media_type=attachment.content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{attachment.filename}"'},
+    )
 
 
 @router.get("/{outreach_id}/debate", response_model=GlobalResponse[dict])

@@ -146,6 +146,16 @@ export default function OutreachDetailPage() {
     }
   };
 
+  const openAttachment = async (index: number) => {
+    if (!outreach) return;
+    try {
+      const url = await api.getAttachmentUrl(outreach.id, index);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      setError(err.message || 'Failed to open attachment.');
+    }
+  };
+
   const handleSignout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
@@ -307,9 +317,14 @@ export default function OutreachDetailPage() {
 
             {/* Original Outreach Email Block */}
             <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: isMobile ? '20px' : '28px', boxShadow: 'var(--shadow-sm)' }}>
-              <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>Outreach Communication</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+              <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>SUBJECT</span>
+                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>
+                    {outreach.subject || '(no subject)'}
+                  </span>
+                </div>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0 }}>
                   RECEIVED: {new Date(outreach.received_at).toLocaleString()}
                 </span>
               </div>
@@ -336,11 +351,16 @@ export default function OutreachDetailPage() {
                 <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>ATTACHMENTS</span>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                    {outreach.attachment_keys.map((key, idx) => (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--gray-50)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '6px 12px', fontSize: 'var(--text-xs)', color: 'var(--text-body)' }}>
+                    {outreach.attachment_keys.map((attachment, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => openAttachment(idx)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--gray-50)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '6px 12px', fontSize: 'var(--text-xs)', color: 'var(--text-body)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
+                      >
                         <FileText size={14} style={{ color: 'var(--text-muted)' }} />
-                        <span>{key}</span>
-                      </div>
+                        <span>{attachment.filename}</span>
+                      </button>
                     ))}
                   </div>
                 </div>

@@ -423,6 +423,20 @@ export default function InboxPage() {
                           </span>
                         </div>
                         
+                        <span
+                          style={{
+                            fontFamily: 'var(--font-sans)',
+                            fontSize: 'var(--text-sm)',
+                            fontWeight: 500,
+                            color: 'var(--text-body)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {item.subject || '(no subject)'}
+                        </span>
+
                         <p
                           style={{
                             margin: 0,

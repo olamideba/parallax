@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import UUID
 
 from loguru import logger
 from uuid6 import uuid7
 
-from src.application.ports.outbound.email import InboundEmail
+from src.application.ports.outbound.email import InboundEmail, InboundEmailGateway
+from src.application.ports.outbound.object_storage import ObjectStorage
 from src.application.ports.outbound.repository import OutreachRepository, ProfessorRepository
 from src.domain.models.outreach import (
     EMAIL_CHANNEL,
     SYSTEM_CONFIRMATION_CHANNEL,
+    Attachment,
     Outreach,
     OutreachStatus,
 )
@@ -18,17 +21,23 @@ from src.domain.models.outreach import (
 class ProcessInboundEmailUseCase:
     """Resolve an inbound email to its professor and persist an Outreach.
 
-    Attachment download/storage is deferred (R2 stubbed); for now the provider
-    attachment ids are recorded on the outreach as keys.
+    Provider attachments are downloaded and copied into object storage (R2) so
+    the outreach references stable storage keys + original filenames, not opaque
+    provider ids that expire. A failed attachment download is logged and skipped
+    rather than dropping the whole email.
     """
 
     def __init__(
         self,
         outreach_repo: OutreachRepository,
         professor_repo: ProfessorRepository,
+        inbound_gateway: InboundEmailGateway,
+        object_storage: ObjectStorage,
     ) -> None:
         self._outreach_repo = outreach_repo
         self._professor_repo = professor_repo
+        self._inbound_gateway = inbound_gateway
+        self._object_storage = object_storage
 
     async def execute(self, inbound: InboundEmail) -> Outreach | None:
         professor = await self._professor_repo.get_by_intake_email(inbound.recipient)
@@ -41,8 +50,10 @@ class ProcessInboundEmailUseCase:
             if inbound.is_system_confirmation
             else EMAIL_CHANNEL
         )
+        outreach_id = uuid7()
+        attachments = await self._store_attachments(outreach_id, inbound.attachment_ids)
         outreach = Outreach(
-            id=uuid7(),
+            id=outreach_id,
             professor_id=professor.id,
             channel=channel,
             sender_email=inbound.sender_email,
@@ -50,8 +61,22 @@ class ProcessInboundEmailUseCase:
             subject=inbound.subject,
             body=inbound.text_body,
             body_html=inbound.html_body,
-            attachment_keys=inbound.attachment_ids,
+            attachment_keys=attachments,
             received_at=datetime.now(UTC),
             status=OutreachStatus.PENDING_TRIAGE,
         )
         return await self._outreach_repo.save(outreach)
+
+    async def _store_attachments(
+        self, outreach_id: UUID, attachment_ids: list[str]
+    ) -> list[Attachment]:
+        stored: list[Attachment] = []
+        for attachment_id in attachment_ids:
+            try:
+                data, filename = await self._inbound_gateway.download_attachment(attachment_id)
+                storage_key = f"outreach/{outreach_id}/{attachment_id}/{filename}"
+                await self._object_storage.upload(storage_key, data)
+                stored.append(Attachment(storage_key=storage_key, filename=filename))
+            except Exception as exc:  # noqa: BLE001 — never drop the email over one bad file
+                logger.warning("Could not store attachment {}: {}", attachment_id, exc)
+        return stored

@@ -72,6 +72,12 @@ export interface DebateTrace {
   ended_at: string | null;
 }
 
+export interface Attachment {
+  storage_key: string;
+  filename: string;
+  content_type: string | null;
+}
+
 export interface Outreach {
   id: string;
   professor_id: string;
@@ -81,7 +87,7 @@ export interface Outreach {
   subject: string | null;
   body: string;
   body_html: string | null;
-  attachment_keys: string[];
+  attachment_keys: Attachment[];
   received_at: string;
   extracted_profile: ExtractedProfile | null;
   extracted_claims: ExtractedClaim[];
@@ -251,6 +257,17 @@ export const api = {
   },
   
   getReviewDetail: (id: string) => apiFetch<Outreach>(`/reviews/${id}`),
+
+  // Fetches a stored attachment (auth header required) and returns a blob URL
+  // the caller can open / revoke. Returns raw bytes, not the JSON envelope.
+  getAttachmentUrl: async (id: string, index: number): Promise<string> => {
+    const token = await getAuthToken();
+    const res = await fetch(`${API_BASE}/api/v1/reviews/${id}/attachments/${index}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Failed to load attachment (${res.status})`);
+    return URL.createObjectURL(await res.blob());
+  },
 
   getDebateTrace: (id: string) => apiFetch<DebateTrace>(`/reviews/${id}/debate`),
   
