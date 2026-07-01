@@ -151,6 +151,19 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   };
 }
 
+// Pull the human-readable error off a failed Response. The backend returns
+// FastAPI's `{ detail }` on HTTPExceptions and our `{ message }` envelope on
+// handled failures — reading both here means any new backend error message is
+// surfaced by the frontend automatically, without a per-call change.
+async function extractErrorDetail(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = await res.json();
+    return data.detail || data.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers = await getAuthHeaders();
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -167,14 +180,7 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
   });
 
   if (!res.ok) {
-    let errorDetail = 'API error occurred';
-    try {
-      const errorData = await res.json();
-      errorDetail = errorData.detail || errorData.message || errorDetail;
-    } catch {
-      // Ignore
-    }
-    throw new Error(errorDetail);
+    throw new Error(await extractErrorDetail(res, 'API error occurred'));
   }
 
   const envelope = (await res.json()) as GlobalResponse<T>;
@@ -219,8 +225,7 @@ export const api = {
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error((err as { detail?: string }).detail || `Upload failed (${res.status})`);
+      throw new Error(await extractErrorDetail(res, `Upload failed (${res.status})`));
     }
     const envelope = (await res.json()) as GlobalResponse<{
       storage_key: string;
@@ -265,7 +270,9 @@ export const api = {
     const res = await fetch(`${API_BASE}/api/v1/reviews/${id}/attachments/${index}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    if (!res.ok) throw new Error(`Failed to load attachment (${res.status})`);
+    if (!res.ok) {
+      throw new Error(await extractErrorDetail(res, `Failed to load attachment (${res.status})`));
+    }
     return URL.createObjectURL(await res.blob());
   },
 

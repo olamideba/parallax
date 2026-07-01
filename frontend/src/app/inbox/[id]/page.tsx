@@ -24,6 +24,7 @@ export default function OutreachDetailPage() {
   const [outreach, setOutreach] = useState<Outreach | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
 
   // Override Form State
@@ -149,11 +150,14 @@ export default function OutreachDetailPage() {
 
   const openAttachment = async (index: number) => {
     if (!outreach) return;
+    setAttachmentError(null);
     try {
       const url = await api.getAttachmentUrl(outreach.id, index);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err: any) {
-      setError(err.message || 'Failed to open attachment.');
+      // Shown inline in the attachments block — the page-level banner sits far
+      // above the fold, so a failure there would be invisible to the reader.
+      setAttachmentError(err.message || 'Failed to open attachment.');
     }
   };
 
@@ -359,6 +363,12 @@ export default function OutreachDetailPage() {
                       </button>
                     ))}
                   </div>
+                  {attachmentError && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--status-critical-ink)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)' }}>
+                      <AlertCircle size={13} style={{ flexShrink: 0 }} />
+                      <span>{attachmentError}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

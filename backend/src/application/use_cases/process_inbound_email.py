@@ -51,7 +51,7 @@ class ProcessInboundEmailUseCase:
             else EMAIL_CHANNEL
         )
         outreach_id = uuid7()
-        attachments = await self._store_attachments(outreach_id, inbound.attachment_ids)
+        attachments = await self._store_attachments(outreach_id, inbound)
         outreach = Outreach(
             id=outreach_id,
             professor_id=professor.id,
@@ -68,26 +68,34 @@ class ProcessInboundEmailUseCase:
         return await self._outreach_repo.save(outreach)
 
     async def _store_attachments(
-        self, outreach_id: UUID, attachment_ids: list[str]
+        self, outreach_id: UUID, inbound: InboundEmail
     ) -> list[Attachment]:
+        if not inbound.attachment_ids or not inbound.provider_message_id:
+            return []
+
+        try:
+            fetched = await self._inbound_gateway.fetch_attachments(inbound.provider_message_id)
+        except Exception as exc:  # noqa: BLE001 — never drop the email over attachments
+            logger.warning(
+                "Could not fetch attachments for email {}: {}", inbound.provider_message_id, exc
+            )
+            return []
+
         stored: list[Attachment] = []
-        for attachment_id in attachment_ids:
+        for att in fetched:
             try:
-                data, filename, content_type = await self._inbound_gateway.download_attachment(
-                    attachment_id
-                )
-                storage_key = f"outreach/{outreach_id}/{attachment_id}/{filename}"
+                storage_key = f"outreach/{outreach_id}/{att.provider_id}/{att.filename}"
                 await self._object_storage.upload(
-                    storage_key, data, content_type or "application/octet-stream"
+                    storage_key, att.data, att.content_type or "application/octet-stream"
                 )
                 stored.append(
                     Attachment(
                         storage_key=storage_key,
-                        filename=filename,
-                        content_type=content_type,
+                        filename=att.filename,
+                        content_type=att.content_type,
                     )
                 )
-                logger.info("Stored attachment {} -> {}", attachment_id, storage_key)
+                logger.info("Stored attachment {} -> {}", att.provider_id, storage_key)
             except Exception as exc:  # noqa: BLE001 — never drop the email over one bad file
-                logger.warning("Could not store attachment {}: {}", attachment_id, exc)
+                logger.warning("Could not store attachment {}: {}", att.provider_id, exc)
         return stored

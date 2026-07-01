@@ -10,12 +10,16 @@ import httpx
 from loguru import logger
 
 from src.adapters.email.confirmation import is_forwarding_confirmation
-from src.application.ports.outbound.email import InboundEmail, InboundEmailGateway
+from src.application.ports.outbound.email import (
+    FetchedAttachment,
+    InboundEmail,
+    InboundEmailGateway,
+)
 from src.config import get_settings
 from src.domain.exceptions.base import IntakeError
 
-_ATTACHMENT_URL = "https://api.resend.com/emails/attachments/{id}"
 _RECEIVED_URL = "https://api.resend.com/emails/receiving/{id}"
+_ATTACHMENTS_URL = "https://api.resend.com/emails/receiving/{id}/attachments"
 
 
 class ResendInboundGateway(InboundEmailGateway):
@@ -85,25 +89,47 @@ class ResendInboundGateway(InboundEmailGateway):
             text_body=data.get("text") or "",
             html_body=data.get("html"),
             attachment_ids=[a["id"] for a in data.get("attachments", []) if "id" in a],
+            provider_message_id=data.get("id") or data.get("email_id"),
             is_system_confirmation=is_forwarding_confirmation(sender_email, subject),
         )
 
-    async def download_attachment(self, attachment_id: str) -> tuple[bytes, str, str | None]:
+    async def fetch_attachments(self, email_id: str) -> list[FetchedAttachment]:
+        """List the received email's attachments, then download each via its
+        signed URL. Resend exposes attachments per-email
+        (`GET /emails/receiving/{id}/attachments`) — there is no standalone
+        `/emails/attachments/{id}` route."""
         settings = get_settings()
         if not settings.RESEND_API_KEY:
             raise IntakeError("RESEND_API_KEY is not configured")
+
         async with httpx.AsyncClient(timeout=60.0) as client:
-            meta = await client.get(
-                _ATTACHMENT_URL.format(id=attachment_id),
+            listing = await client.get(
+                _ATTACHMENTS_URL.format(id=email_id),
                 headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
             )
-            meta.raise_for_status()
-            info = meta.json()
-            download_url = info["download_url"]
-            filename = info.get("filename", attachment_id)
-            content_type = info.get("content_type") or info.get("contentType")
-            file_resp = await client.get(download_url)
-            file_resp.raise_for_status()
-        # Prefer the provider's declared type; fall back to the download response.
-        content_type = content_type or file_resp.headers.get("content-type")
-        return file_resp.content, filename, content_type
+            listing.raise_for_status()
+            body = listing.json()
+            # Resend list responses wrap items under `data`.
+            items = body.get("data", body) if isinstance(body, dict) else body
+
+            fetched: list[FetchedAttachment] = []
+            for item in items:
+                download_url = item.get("download_url")
+                if not download_url:
+                    logger.warning("Attachment {} has no download_url; skipping", item.get("id"))
+                    continue
+                provider_id = item.get("id") or item.get("content_id") or ""
+                filename = item.get("filename") or provider_id or "attachment"
+                content_type = item.get("content_type") or item.get("contentType")
+                # download_url is signed — no auth header, and it may be cross-host.
+                file_resp = await client.get(download_url, follow_redirects=True)
+                file_resp.raise_for_status()
+                fetched.append(
+                    FetchedAttachment(
+                        provider_id=provider_id or filename,
+                        filename=filename,
+                        content_type=content_type or file_resp.headers.get("content-type"),
+                        data=file_resp.content,
+                    )
+                )
+        return fetched
