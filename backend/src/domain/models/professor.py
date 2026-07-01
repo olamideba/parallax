@@ -45,3 +45,7 @@ class Professor(BaseModel):
     capacity: Capacity = Field(default_factory=Capacity)
     publications: list[Publication] = Field(default_factory=list)
     gatekeeper_aggressiveness: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Free-text directive the professor sets at onboarding to steer the agent
+    # society (e.g. "only theory students, no pure-applied ML"). Injected into
+    # the Gatekeeper prompt and, later, the debate agents.
+    custom_instructions: str | None = None

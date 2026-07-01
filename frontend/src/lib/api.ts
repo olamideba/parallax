@@ -112,6 +112,7 @@ export interface ProfessorProfile {
   gatekeeper_aggressiveness: number;
   auto_resolve_declines: boolean;
   hold_when_at_capacity: boolean;
+  custom_instructions: string | null;
 }
 
 export type PublicationStatus =

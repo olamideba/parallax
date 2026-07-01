@@ -138,6 +138,7 @@ def _record_to_professor(r: ProfessorRecord, pubs: list[PublicationRecord]) -> P
             hold_when_at_capacity=r.hold_when_at_capacity,
         ),
         gatekeeper_aggressiveness=r.gatekeeper_aggressiveness,
+        custom_instructions=r.custom_instructions,
         publications=[_record_to_publication(p) for p in pubs],
     )
 
@@ -243,6 +244,7 @@ class SqlProfessorRepository(ProfessorRepository):
             gatekeeper_aggressiveness=professor.gatekeeper_aggressiveness,
             auto_resolve_declines=professor.capacity.auto_resolve_declines,
             hold_when_at_capacity=professor.capacity.hold_when_at_capacity,
+            custom_instructions=professor.custom_instructions,
         )
         merged = await self._session.merge(record)
         await self._session.commit()
