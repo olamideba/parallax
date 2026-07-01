@@ -73,10 +73,21 @@ class ProcessInboundEmailUseCase:
         stored: list[Attachment] = []
         for attachment_id in attachment_ids:
             try:
-                data, filename = await self._inbound_gateway.download_attachment(attachment_id)
+                data, filename, content_type = await self._inbound_gateway.download_attachment(
+                    attachment_id
+                )
                 storage_key = f"outreach/{outreach_id}/{attachment_id}/{filename}"
-                await self._object_storage.upload(storage_key, data)
-                stored.append(Attachment(storage_key=storage_key, filename=filename))
+                await self._object_storage.upload(
+                    storage_key, data, content_type or "application/octet-stream"
+                )
+                stored.append(
+                    Attachment(
+                        storage_key=storage_key,
+                        filename=filename,
+                        content_type=content_type,
+                    )
+                )
+                logger.info("Stored attachment {} -> {}", attachment_id, storage_key)
             except Exception as exc:  # noqa: BLE001 — never drop the email over one bad file
                 logger.warning("Could not store attachment {}: {}", attachment_id, exc)
         return stored

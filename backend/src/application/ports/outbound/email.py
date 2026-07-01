@@ -37,8 +37,8 @@ class InboundEmailGateway(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def download_attachment(self, attachment_id: str) -> tuple[bytes, str]:
-        """Return (file_bytes, filename) for a provider attachment id."""
+    async def download_attachment(self, attachment_id: str) -> tuple[bytes, str, str | None]:
+        """Return (file_bytes, filename, content_type) for a provider attachment id."""
         raise NotImplementedError
 
 

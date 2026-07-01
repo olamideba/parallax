@@ -14,6 +14,7 @@ from src.application.ports.outbound.repository import (
     DebateTraceRepository,
     OutreachRepository,
 )
+from src.domain.exceptions.base import NotFoundError
 from src.domain.models.outreach import (
     SYSTEM_CONFIRMATION_CHANNEL,
     Decision,
@@ -105,7 +106,15 @@ async def download_attachment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
 
     attachment = outreach.attachment_keys[index]
-    data = await object_storage.download(attachment.storage_key)
+    try:
+        data = await object_storage.download(attachment.storage_key)
+    except NotFoundError as exc:
+        # The reference exists on the outreach but the bytes were never uploaded
+        # to R2 (e.g. legacy rows ingested before attachment upload was wired).
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attachment file is no longer available",
+        ) from exc
     return Response(
         content=data,
         media_type=attachment.content_type or "application/octet-stream",

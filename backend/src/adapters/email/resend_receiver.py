@@ -88,7 +88,7 @@ class ResendInboundGateway(InboundEmailGateway):
             is_system_confirmation=is_forwarding_confirmation(sender_email, subject),
         )
 
-    async def download_attachment(self, attachment_id: str) -> tuple[bytes, str]:
+    async def download_attachment(self, attachment_id: str) -> tuple[bytes, str, str | None]:
         settings = get_settings()
         if not settings.RESEND_API_KEY:
             raise IntakeError("RESEND_API_KEY is not configured")
@@ -101,6 +101,9 @@ class ResendInboundGateway(InboundEmailGateway):
             info = meta.json()
             download_url = info["download_url"]
             filename = info.get("filename", attachment_id)
+            content_type = info.get("content_type") or info.get("contentType")
             file_resp = await client.get(download_url)
             file_resp.raise_for_status()
-        return file_resp.content, filename
+        # Prefer the provider's declared type; fall back to the download response.
+        content_type = content_type or file_resp.headers.get("content-type")
+        return file_resp.content, filename, content_type
