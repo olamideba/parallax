@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # Must match the pgvector column dimension (PublicationChunkRecord.embedding).
     DASHSCOPE_EMBED_DIMS: int = Field(default=1024)
     DASHSCOPE_TIMEOUT: float = Field(default=60.0)
+    # Reranking (qwen3-rerank) lives on a workspace-scoped host, distinct from
+    # DASHSCOPE_BASE_URL — see adapters/qwen_cloud/reranker.py.
+    DASHSCOPE_WORKSPACE_ID: str = Field(default="")
+    DASHSCOPE_RERANK_MODEL: str = Field(default="qwen3-rerank")
+    DASHSCOPE_RERANK_REGION: str = Field(default="ap-southeast-1")
 
     # Debate
     DEBATE_ROUND_CAP: int = Field(default=3)

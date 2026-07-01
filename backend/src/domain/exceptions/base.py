@@ -22,3 +22,9 @@ class DebateError(ParallaxError):
 
 class IntakeError(ParallaxError):
     pass
+
+
+class ExternalToolError(ParallaxError):
+    """A skill/tool an agent invoked (retrieval, rerank, MCP call) failed."""
+
+    pass

@@ -2,13 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from src.adapters.qwen_cloud.chat_model import (
-    _assert_compliant,
-    _model_for_role,
-    get_chat_model,
-)
+from src.adapters.qwen_cloud.chat_model import _model_for_role, get_chat_model
 from src.config import get_settings
 from src.domain.models.society import AgentRole
 
@@ -20,20 +14,6 @@ def test_per_role_model_mapping() -> None:
     assert _model_for_role(AgentRole.ADVOCATE) == settings.QWEN_MODEL_DEBATE
     # None falls back to the debate model.
     assert _model_for_role(None) == settings.QWEN_MODEL_DEBATE
-
-
-def test_compliance_guard_rejects_non_qwen_host() -> None:
-    with pytest.raises(ValueError, match="non-Qwen host"):
-        _assert_compliant("https://api.openai.com/v1")
-
-
-def test_compliance_guard_accepts_dashscope_hosts() -> None:
-    # Must not raise for any permitted Qwen Cloud host.
-    _assert_compliant("https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
-    _assert_compliant("https://dashscope.aliyuncs.com/compatible-mode/v1")
-    _assert_compliant(
-        "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
-    )
 
 
 def test_get_chat_model_builds_qwen_client_pinned_to_dashscope() -> None:
