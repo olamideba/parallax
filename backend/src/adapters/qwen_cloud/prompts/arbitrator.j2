@@ -21,7 +21,7 @@ The professor's standing instructions — honor them in your decision:
 ---
 FULL DEBATE TRANSCRIPT:
 {% for turn in prior_turns %}
-[ROUND {{ turn.round }} — {{ turn.role | upper }}] {{ turn.content }}
+[{{ loop.index0 }}] (round {{ turn.round }}, {{ turn.role | upper }}) {{ turn.content }}
 {% endfor %}
 ---
 

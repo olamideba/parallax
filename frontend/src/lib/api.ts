@@ -113,6 +113,8 @@ export interface ProfessorProfile {
   auto_resolve_declines: boolean;
   hold_when_at_capacity: boolean;
   custom_instructions: string | null;
+  institution: string | null;
+  institution_country: string | null;
 }
 
 export type PublicationStatus =

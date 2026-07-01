@@ -53,6 +53,10 @@ class Settings(BaseSettings):
 
     # Debate
     DEBATE_ROUND_CAP: int = Field(default=3)
+    # Max tool-call iterations a single debater gets within one turn.
+    DEBATE_MAX_TOOL_ROUNDS: int = Field(default=3)
+    # How many baseline corpus chunks are pre-fetched for the debaters.
+    DEBATE_BASELINE_CHUNKS: int = Field(default=4)
 
     # Cloudflare R2
     R2_ACCOUNT_ID: str = Field(default="")
