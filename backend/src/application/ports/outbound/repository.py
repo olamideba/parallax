@@ -27,6 +27,10 @@ class OutreachRepository(ABC):
     async def list_by_channel(self, professor_id: UUID, channel: str) -> list[Outreach]:
         raise NotImplementedError
 
+    @abstractmethod
+    async def delete(self, outreach_id: UUID) -> None:
+        raise NotImplementedError
+
 
 class ProfessorRepository(ABC):
     @abstractmethod

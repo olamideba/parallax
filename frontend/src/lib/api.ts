@@ -300,4 +300,12 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ body }),
   }),
+
+  retriageOutreach: (id: string) => apiFetch<Outreach>(`/reviews/${id}/retriage`, {
+    method: 'POST',
+  }),
+
+  deleteOutreach: (id: string) => apiFetch<{ id: string }>(`/reviews/${id}`, {
+    method: 'DELETE',
+  }),
 };

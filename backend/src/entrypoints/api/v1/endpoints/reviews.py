@@ -30,6 +30,7 @@ from src.entrypoints.api.dependencies import (
     get_trace_repo,
 )
 from src.entrypoints.api.schemas import GlobalResponse
+from src.entrypoints.workers.intake_consumer import triage_and_ingest
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
 
@@ -88,6 +89,48 @@ async def get_review_detail(
     if not outreach or outreach.professor_id != current_professor.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
     return GlobalResponse(data=outreach.model_dump(mode="json"), message="OK")
+
+
+@router.post("/{outreach_id}/retriage", response_model=GlobalResponse[dict])
+async def retriage_outreach(
+    outreach_id: UUID,
+    current_professor: CurrentProfessorDep,
+    outreach_repo: OutreachRepoDep,
+) -> GlobalResponse:
+    """Reset an outreach to `pending_triage` and re-enqueue the Gatekeeper.
+
+    Useful for stub/test rows created before triage was wired, or to re-run
+    triage after the professor edits their custom instructions."""
+    outreach = await outreach_repo.get_by_id(outreach_id)
+    if not outreach or outreach.professor_id != current_professor.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
+
+    outreach.status = OutreachStatus.PENDING_TRIAGE
+    outreach.triage_verdict = None
+    outreach.decision = None
+    outreach.extracted_profile = None
+    outreach.extracted_claims = []
+    outreach.debate_trace_id = None
+    outreach.replied_at = None
+    saved = await outreach_repo.save(outreach)
+
+    triage_and_ingest.delay(str(saved.id), str(saved.professor_id))
+    return GlobalResponse(data=saved.model_dump(mode="json"), message="Re-queued for triage")
+
+
+@router.delete("/{outreach_id}", response_model=GlobalResponse[dict])
+async def delete_outreach(
+    outreach_id: UUID,
+    current_professor: CurrentProfessorDep,
+    outreach_repo: OutreachRepoDep,
+) -> GlobalResponse:
+    """Permanently remove an outreach (e.g. a stub/test row)."""
+    outreach = await outreach_repo.get_by_id(outreach_id)
+    if not outreach or outreach.professor_id != current_professor.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
+
+    await outreach_repo.delete(outreach_id)
+    return GlobalResponse(data={"id": str(outreach_id)}, message="Outreach deleted")
 
 
 @router.get("/{outreach_id}/attachments/{index}")

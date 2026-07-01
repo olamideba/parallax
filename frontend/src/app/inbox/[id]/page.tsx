@@ -39,6 +39,10 @@ export default function OutreachDetailPage() {
   const [replyBody, setReplyBody] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
 
+  // Maintenance actions (retriage / delete stub rows)
+  const [retriaging, setRetriaging] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
@@ -148,6 +152,36 @@ export default function OutreachDetailPage() {
     }
   };
 
+  const handleRetriage = async () => {
+    if (!outreach) return;
+    try {
+      setRetriaging(true);
+      setError(null);
+      const updated = await api.retriageOutreach(outreach.id);
+      setOutreach(updated);
+      setSuccessMsg('Re-queued for Gatekeeper triage.');
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to re-queue for triage.');
+    } finally {
+      setRetriaging(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!outreach) return;
+    if (!window.confirm('Permanently delete this outreach? This cannot be undone.')) return;
+    try {
+      setDeleting(true);
+      setError(null);
+      await api.deleteOutreach(outreach.id);
+      router.push('/inbox');
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete outreach.');
+      setDeleting(false);
+    }
+  };
+
   const openAttachment = async (index: number) => {
     if (!outreach) return;
     setAttachmentError(null);
@@ -238,10 +272,23 @@ export default function OutreachDetailPage() {
         
         {/* Back Link & Notifications */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-          <Link href="/inbox" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
-            <ArrowLeft size={16} />
-            Back to Inbox review queue
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            <Link href="/inbox" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
+              <ArrowLeft size={16} />
+              Back to Inbox review queue
+            </Link>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Button variant="secondary" size="sm" onClick={handleRetriage} disabled={retriaging || deleting}>
+                <RefreshCw size={13} style={{ marginRight: 6 }} />
+                {retriaging ? 'Re-queuing...' : 'Re-run triage'}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleDelete} disabled={retriaging || deleting}>
+                <X size={13} style={{ marginRight: 6 }} />
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
+          </div>
 
           {successMsg && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 'var(--radius-md)', padding: '12px 16px', color: 'var(--status-verified-ink)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>

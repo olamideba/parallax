@@ -225,6 +225,12 @@ class SqlOutreachRepository(OutreachRepository):
         result = await self._session.exec(stmt)
         return [_record_to_outreach(r) for r in result.all()]
 
+    async def delete(self, outreach_id: UUID) -> None:
+        record = await self._session.get(OutreachRecord, outreach_id)
+        if record is not None:
+            await self._session.delete(record)
+            await self._session.commit()
+
 
 class SqlProfessorRepository(ProfessorRepository):
     def __init__(self, session: AsyncSession) -> None:
