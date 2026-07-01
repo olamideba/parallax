@@ -18,6 +18,7 @@ import {
 } from '@/lib/replay/timeline';
 import { ArrowLeft, Play, Pause, SkipBack, SkipForward, FlaskConical, Plug, Puzzle, Database } from 'lucide-react';
 import DebateAgent from './DebateAgent';
+import { Loader } from '@/components/Loader';
 import { ROOM_BG, TABLE_SPRITE } from '@/lib/replay/assets';
 import { TABLE_CSS } from '@/lib/replay/seminarRoom';
 import styles from './replay.module.css';
@@ -115,11 +116,7 @@ export default function DebateReplayPage() {
 
   if (loading) {
     return (
-      <div style={center}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-          Loading debate…
-        </span>
-      </div>
+      <Loader fullscreen width={160} label="Loading debate…" />
     );
   }
   if (!trace) return null;
@@ -354,7 +351,6 @@ function Pill({ text, color }: { text: string; color: string }) {
 }
 
 // ── styles ──
-const center: React.CSSProperties = { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunken)' };
 const hdr: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' };
 const backLink: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' };
 const demoBadge: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--status-triage-ink)', border: '1px solid var(--status-triage-ink)', borderRadius: 'var(--radius-sm)', padding: '2px 6px' };

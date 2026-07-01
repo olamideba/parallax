@@ -10,6 +10,7 @@ import { api, Outreach, Decision } from '@/lib/api';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { Tag } from '@/components/Tag';
+import { Loader } from '@/components/Loader';
 import { useIsMobile } from '@/lib/useMediaQuery';
 import { ArrowLeft, Check, X, AlertCircle, FileText, Send, Sparkles, AlertTriangle, RefreshCw, Play } from 'lucide-react';
 
@@ -163,12 +164,7 @@ export default function OutreachDetailPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          <RefreshCw size={24} className="animate-spin" style={{ color: 'var(--navy-900)' }} />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>Loading candidate data...</span>
-        </div>
-      </div>
+      <Loader fullscreen width={160} label="Loading candidate data..." />
     );
   }
 

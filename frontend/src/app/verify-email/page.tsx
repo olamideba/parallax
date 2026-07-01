@@ -6,6 +6,7 @@ import React, { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
+import { Loader } from '@/components/Loader';
 import Link from 'next/link';
 
 function VerifyEmailContent() {
@@ -136,9 +137,7 @@ function VerifyEmailContent() {
 export default function VerifyEmailPage() {
   return (
     <Suspense fallback={
-      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunken)' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Loading...</span>
-      </div>
+      <Loader fullscreen width={160} label="Loading..." />
     }>
       <VerifyEmailContent />
     </Suspense>

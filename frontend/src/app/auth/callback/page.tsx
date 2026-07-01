@@ -6,6 +6,7 @@ import React, { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Logo, Wordmark } from '@/components/Logo';
+import { Loader } from '@/components/Loader';
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -180,9 +181,7 @@ function AuthCallbackContent() {
 export default function AuthCallbackPage() {
   return (
     <Suspense fallback={
-      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunken)' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Loading...</span>
-      </div>
+      <Loader fullscreen width={160} label="Loading..." />
     }>
       <AuthCallbackContent />
     </Suspense>
