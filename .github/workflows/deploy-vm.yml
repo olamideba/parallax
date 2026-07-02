@@ -1,0 +1,34 @@
+name: Deploy to VM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.VM_TAILSCALE_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy on VM
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VM_SSH_USER }}@${{ secrets.VM_TAILSCALE_IP }} '
+            cd ~/parallax &&
+            git checkout main &&
+            git pull origin main &&
+            cd backend &&
+            docker compose up -d --build api worker
+          '
