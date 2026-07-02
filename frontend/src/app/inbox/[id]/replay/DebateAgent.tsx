@@ -37,6 +37,8 @@ export default function DebateAgent({
   const { seatKey, sprite } = ROLE_SEAT[role];
   const seat = SEATS[seatKey];
   const spriteSrc = getSpritePath(sprite, facing);
+  // Edge seats shift their bubble inward so it never clips the room border.
+  const bubbleAlign = seat.x < 24 ? 'left' : seat.x > 76 ? 'right' : 'center';
 
   return (
     <div
@@ -48,11 +50,13 @@ export default function DebateAgent({
       }}
     >
       {speaking && speechText && (
-        <div
-          className={`${styles.speechBubble} ${typing ? styles.typingCaret : ''}`}
-          style={{ borderColor: `${dot}88` }}
-        >
-          {speechText}
+        <div className={styles.bubblePositioner} data-align={bubbleAlign}>
+          <div
+            className={`${styles.speechBubble} ${typing ? styles.typingCaret : ''}`}
+            style={{ borderColor: `${dot}88` }}
+          >
+            {speechText}
+          </div>
         </div>
       )}
       <div

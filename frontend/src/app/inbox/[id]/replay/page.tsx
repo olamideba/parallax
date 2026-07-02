@@ -220,18 +220,28 @@ export default function DebateReplayPage() {
           minHeight: 0,
           display: 'flex',
           flexDirection: isMobile ? 'column' : 'row',
-          gap: 16,
-          padding: isMobile ? '12px 16px' : '16px 24px',
-          maxWidth: 1500,
+          justifyContent: 'center',
+          gap: 14,
+          padding: isMobile ? '12px 12px' : '14px 16px',
+          maxWidth: 1600,
           width: '100%',
           margin: '0 auto',
           boxSizing: 'border-box',
           overflow: isMobile ? 'auto' : 'hidden',
         }}
       >
-        {/* ── STAGE CARD ── pixel-art seminar room; sprites, bubbles and the
-            log all derive from the same playhead-driven, seekable clock. */}
-        <section style={{ ...stageCard, flex: isMobile ? '0 0 auto' : 1.55 }}>
+        {/* ── STAGE CARD ── aspect-locked to the room canvas (1200×896) so the
+            art fills it edge-to-edge with no letterbox; sprites, bubbles and
+            the log all derive from the same playhead-driven, seekable clock. */}
+        <section
+          style={{
+            ...stageCard,
+            aspectRatio: '1200 / 896',
+            ...(isMobile
+              ? { width: '100%', flex: '0 0 auto' }
+              : { height: '100%', width: 'auto', maxWidth: '100%', flexShrink: 0 }),
+          }}
+        >
           <div className={styles.roomStage}>
             <img src={ROOM_BG} alt="" className={styles.roomBackground} />
             <img
@@ -292,7 +302,7 @@ export default function DebateReplayPage() {
         </section>
 
         {/* ── RAIL CARD ── participants header + evidence ledger + chat log ── */}
-        <aside style={{ ...railCard, flex: 1, maxWidth: isMobile ? undefined : 430, minHeight: isMobile ? 380 : 0 }}>
+        <aside style={{ ...railCard, flex: '1 1 340px', maxWidth: isMobile ? undefined : 420, minHeight: isMobile ? 380 : 0 }}>
           {/* Slack-style channel header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
             <Hash size={15} style={{ color: 'var(--text-muted)' }} />
@@ -541,7 +551,7 @@ const hdrInner: React.CSSProperties = { display: 'flex', alignItems: 'center', g
 const backLink: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' };
 const reviewBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', background: 'var(--navy-900)', color: '#fff', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', fontWeight: 600, padding: '7px 12px', borderRadius: 'var(--radius-md)' };
 const demoBadge: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--status-pending-ink)', background: 'var(--status-pending-bg)', borderRadius: 'var(--radius-sm)', padding: '3px 7px' };
-const stageCard: React.CSSProperties = { position: 'relative', minWidth: 0, background: 'var(--navy-950)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const stageCard: React.CSSProperties = { position: 'relative', minWidth: 0, background: 'var(--navy-950)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: 'var(--shadow-md)' };
 const railCard: React.CSSProperties = { display: 'flex', flexDirection: 'column', minWidth: 300, background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' };
 const railLabel: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.05em' };
 const startOverlay: React.CSSProperties = { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, background: 'rgba(3, 11, 29, 0.45)', zIndex: 300 };

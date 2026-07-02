@@ -2,13 +2,10 @@
 
 .roomStage {
   position: relative;
-  /* Lock to the canvas aspect ratio so neither image needs to crop or stretch.
-     Both PNGs are 1200×896. Letterboxes inside the dark stage card instead of
-     dictating the page height. */
-  aspect-ratio: 1200 / 896;
+  /* The stage CARD is aspect-locked (see page.tsx), so the room simply fills
+     it — no internal letterboxing. */
+  width: 100%;
   height: 100%;
-  max-width: 100%;
-  margin: auto;
   overflow: hidden;
 }
 
@@ -94,36 +91,65 @@
 
 /* ── Speech bubble (in-scene, typewritten) ─────────────────────────────── */
 
-.speechBubble {
+/* Positioner owns placement + the tail; it shifts for edge seats so a
+   far-left/right speaker's bubble extends into the room instead of clipping.
+   The inner .speechBubble owns only the pop animation. */
+.bubblePositioner {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 10px);
+  width: max-content;
+  max-width: 230px;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.bubblePositioner[data-align='center'] {
   left: 50%;
   transform: translateX(-50%);
+}
+.bubblePositioner[data-align='left'] {
+  left: 50%;
+  transform: translateX(-14%);
+}
+.bubblePositioner[data-align='right'] {
+  left: 50%;
+  transform: translateX(-86%);
+}
+
+/* Tail always points down at the sprite center regardless of shift. */
+.bubblePositioner::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  border: 5px solid transparent;
+  border-top-color: rgba(9, 14, 30, 0.95);
+}
+.bubblePositioner[data-align='center']::after {
+  left: 50%;
+  transform: translateX(-50%);
+}
+.bubblePositioner[data-align='left']::after {
+  left: 14%;
+  transform: translateX(-50%);
+}
+.bubblePositioner[data-align='right']::after {
+  left: 86%;
+  transform: translateX(-50%);
+}
+
+.speechBubble {
   background: rgba(9, 14, 30, 0.95);
   border: 1px solid rgba(161, 171, 232, 0.4);
   border-radius: 8px;
   padding: 7px 10px;
-  width: max-content;
-  max-width: 230px;
   min-width: 60px;
   font-size: 10.5px;
   font-family: var(--font-mono, monospace);
   line-height: 1.4;
   color: #e7eaf6;
   text-align: left;
-  z-index: 200;
-  pointer-events: none;
+  transform-origin: bottom center;
   animation: bubblePop 180ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-.speechBubble::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: rgba(9, 14, 30, 0.95);
 }
 
 .typingCaret::after {
@@ -234,11 +260,11 @@
 
 @keyframes bubblePop {
   0% {
-    transform: translateX(-50%) scale(0.6) translateY(4px);
+    transform: scale(0.6) translateY(4px);
     opacity: 0;
   }
   100% {
-    transform: translateX(-50%) scale(1) translateY(0);
+    transform: scale(1) translateY(0);
     opacity: 1;
   }
 }

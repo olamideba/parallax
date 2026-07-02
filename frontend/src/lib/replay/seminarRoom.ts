@@ -36,12 +36,16 @@ export const TABLE_CSS = {
 //   side-near:  lower-right long side — the Assessor, opposite the Auditor
 //   room-edge:  floor's left corner by the fire extinguisher — the Gatekeeper
 //               (pre-filter, not a debater — visibly outside the tribunal)
+// The visible oval (in stage %) spans x[32%-67%] y[38%-64%]; iso tips are
+// far/head at upper-right (~63%, 41%) and near/foot at lower-left (~37%, 61%).
+// Each seat marks the agent's FEET, offset just outside the tabletop so the
+// sprite reads as standing at that edge.
 export const SEATS: Record<string, Seat> = {
-  'head-far':  { x: 71.5, y: 48.0, facing: 'front-left',  zIndex: 48 },
-  'foot-near': { x: 28.5, y: 72.0, facing: 'rear-right',  zIndex: 72 },
-  'side-rear': { x: 44.0, y: 45.5, facing: 'front-right', zIndex: 46 },
-  'side-near': { x: 60.0, y: 74.0, facing: 'rear-left',   zIndex: 74 },
-  'room-edge': { x: 11.0, y: 64.0, facing: 'front-right', zIndex: 64 },
+  'head-far':  { x: 66.0, y: 45.0, facing: 'front-left',  zIndex: 45 }, // arbitrator, far end (by whiteboard)
+  'foot-near': { x: 34.0, y: 66.0, facing: 'rear-right',  zIndex: 66 }, // advocate, near end (opposite)
+  'side-rear': { x: 41.0, y: 43.0, facing: 'front-right', zIndex: 43 }, // auditor, upper-left long side
+  'side-near': { x: 61.0, y: 66.0, facing: 'rear-left',   zIndex: 66 }, // assessor, lower-right long side
+  'room-edge': { x: 14.0, y: 62.0, facing: 'front-right', zIndex: 62 }, // gatekeeper, off-table by extinguisher
 };
 
 export const ROLE_SEAT: Record<AgentRole, { seatKey: keyof typeof SEATS; sprite: AgentSprite }> = {
