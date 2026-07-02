@@ -3,11 +3,12 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 import aioboto3
+from botocore.exceptions import ClientError
 from loguru import logger
 
 from src.application.ports.outbound.object_storage import ObjectStorage
 from src.config import get_settings
-from src.domain.exceptions.base import IngestionError
+from src.domain.exceptions.base import IngestionError, NotFoundError
 
 
 @asynccontextmanager
@@ -37,7 +38,13 @@ class R2ObjectStorage(ObjectStorage):
     async def download(self, storage_key: str) -> bytes:
         async with _r2_client() as (client, bucket):
             logger.debug("Downloading {} from bucket {}", storage_key, bucket)
-            resp = await client.get_object(Bucket=bucket, Key=storage_key)
+            try:
+                resp = await client.get_object(Bucket=bucket, Key=storage_key)
+            except ClientError as exc:
+                code = exc.response.get("Error", {}).get("Code")
+                if code in ("NoSuchKey", "404", "NotFound"):
+                    raise NotFoundError(f"Object {storage_key} not found in storage") from exc
+                raise
             async with resp["Body"] as stream:
                 return await stream.read()
 

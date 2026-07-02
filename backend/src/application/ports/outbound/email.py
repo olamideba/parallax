@@ -16,7 +16,17 @@ class InboundEmail(BaseModel):
     text_body: str = ""
     html_body: str | None = None
     attachment_ids: list[str] = []
+    provider_message_id: str | None = None  # provider id used to fetch attachments
     is_system_confirmation: bool = False
+
+
+class FetchedAttachment(BaseModel):
+    """A downloaded inbound attachment ready to be persisted to object storage."""
+
+    provider_id: str
+    filename: str
+    content_type: str | None = None
+    data: bytes
 
 
 class InboundEmailGateway(ABC):
@@ -37,8 +47,8 @@ class InboundEmailGateway(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def download_attachment(self, attachment_id: str) -> tuple[bytes, str]:
-        """Return (file_bytes, filename) for a provider attachment id."""
+    async def fetch_attachments(self, email_id: str) -> list[FetchedAttachment]:
+        """Download all attachments for a received email (bytes + metadata)."""
         raise NotImplementedError
 
 

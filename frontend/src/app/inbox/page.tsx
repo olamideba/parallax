@@ -10,6 +10,7 @@ import { api, Outreach, ProfessorProfile } from '@/lib/api';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { Tag } from '@/components/Tag';
+import { Loader } from '@/components/Loader';
 import { useIsMobile } from '@/lib/useMediaQuery';
 import { Inbox, LogOut, Users, BookOpen, Settings, ChevronRight, AlertCircle } from 'lucide-react';
 
@@ -289,8 +290,8 @@ export default function InboxPage() {
 
           {/* Queue List / Empty State / Loading */}
           {loadingQueue ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>Loading review queue...</span>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
+              <Loader width={140} label="Loading review queue..." />
             </div>
           ) : outreaches.length === 0 ? (
             <div
@@ -598,9 +599,13 @@ export default function InboxPage() {
                 }}
               >
                 <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>INTAKE ADDRESS:</span>
-                <span style={{ color: 'var(--text-strong)', fontSize: '11px', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
-                  {profile?.intake_email || 'Generating address...'}
-                </span>
+                {profile?.intake_email ? (
+                  <span style={{ color: 'var(--text-strong)', fontSize: '11px', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+                    {profile.intake_email}
+                  </span>
+                ) : (
+                  <Loader width={72} label="Generating address..." style={{ alignItems: 'flex-start', gap: '6px' }} />
+                )}
               </div>
             </div>
 

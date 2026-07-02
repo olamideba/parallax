@@ -14,6 +14,7 @@ from src.application.ports.outbound.repository import (
     DebateTraceRepository,
     OutreachRepository,
 )
+from src.domain.exceptions.base import NotFoundError
 from src.domain.models.outreach import (
     SYSTEM_CONFIRMATION_CHANNEL,
     Decision,
@@ -29,6 +30,7 @@ from src.entrypoints.api.dependencies import (
     get_trace_repo,
 )
 from src.entrypoints.api.schemas import GlobalResponse
+from src.entrypoints.workers.intake_consumer import triage_and_ingest
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
 
@@ -89,6 +91,48 @@ async def get_review_detail(
     return GlobalResponse(data=outreach.model_dump(mode="json"), message="OK")
 
 
+@router.post("/{outreach_id}/retriage", response_model=GlobalResponse[dict])
+async def retriage_outreach(
+    outreach_id: UUID,
+    current_professor: CurrentProfessorDep,
+    outreach_repo: OutreachRepoDep,
+) -> GlobalResponse:
+    """Reset an outreach to `pending_triage` and re-enqueue the Gatekeeper.
+
+    Useful for stub/test rows created before triage was wired, or to re-run
+    triage after the professor edits their custom instructions."""
+    outreach = await outreach_repo.get_by_id(outreach_id)
+    if not outreach or outreach.professor_id != current_professor.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
+
+    outreach.status = OutreachStatus.PENDING_TRIAGE
+    outreach.triage_verdict = None
+    outreach.decision = None
+    outreach.extracted_profile = None
+    outreach.extracted_claims = []
+    outreach.debate_trace_id = None
+    outreach.replied_at = None
+    saved = await outreach_repo.save(outreach)
+
+    triage_and_ingest.delay(str(saved.id), str(saved.professor_id))
+    return GlobalResponse(data=saved.model_dump(mode="json"), message="Re-queued for triage")
+
+
+@router.delete("/{outreach_id}", response_model=GlobalResponse[dict])
+async def delete_outreach(
+    outreach_id: UUID,
+    current_professor: CurrentProfessorDep,
+    outreach_repo: OutreachRepoDep,
+) -> GlobalResponse:
+    """Permanently remove an outreach (e.g. a stub/test row)."""
+    outreach = await outreach_repo.get_by_id(outreach_id)
+    if not outreach or outreach.professor_id != current_professor.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
+
+    await outreach_repo.delete(outreach_id)
+    return GlobalResponse(data={"id": str(outreach_id)}, message="Outreach deleted")
+
+
 @router.get("/{outreach_id}/attachments/{index}")
 async def download_attachment(
     outreach_id: UUID,
@@ -105,7 +149,15 @@ async def download_attachment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
 
     attachment = outreach.attachment_keys[index]
-    data = await object_storage.download(attachment.storage_key)
+    try:
+        data = await object_storage.download(attachment.storage_key)
+    except NotFoundError as exc:
+        # The reference exists on the outreach but the bytes were never uploaded
+        # to R2 (e.g. legacy rows ingested before attachment upload was wired).
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attachment file is no longer available",
+        ) from exc
     return Response(
         content=data,
         media_type=attachment.content_type or "application/octet-stream",

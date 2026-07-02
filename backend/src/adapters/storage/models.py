@@ -33,6 +33,9 @@ class ProfessorRecord(SQLModel, table=True):
     gatekeeper_aggressiveness: float = Field(default=0.5)
     auto_resolve_declines: bool = Field(default=True)
     hold_when_at_capacity: bool = Field(default=True)
+    custom_instructions: str | None = Field(default=None)
+    institution: str | None = Field(default=None, max_length=255)
+    institution_country: str | None = Field(default=None, max_length=120)
 
     publications: list["PublicationRecord"] = Relationship(back_populates="professor")
     outreaches: list["OutreachRecord"] = Relationship(back_populates="professor")

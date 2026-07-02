@@ -147,6 +147,9 @@ export default function OnboardingPage() {
   const [areas, setAreas] = useState(['Sparse attention', 'Long-context retrieval', 'Efficient transformers']);
   const [autoDecline, setAutoDecline] = useState(true);
   const [holdAtCapacity, setHoldAtCapacity] = useState(true);
+  const [customInstructions, setCustomInstructions] = useState('');
+  const [institution, setInstitution] = useState('');
+  const [institutionCountry, setInstitutionCountry] = useState('');
   const [saving, setSaving] = useState(false);
 
   /* — Intake email state — */
@@ -205,6 +208,9 @@ export default function OnboardingPage() {
         }
         setAutoDecline(prof.auto_resolve_declines ?? true);
         setHoldAtCapacity(prof.hold_when_at_capacity ?? true);
+        setCustomInstructions(prof.custom_instructions || '');
+        setInstitution(prof.institution || '');
+        setInstitutionCountry(prof.institution_country || '');
       }
       
       const pubs = await api.getPublications();
@@ -355,6 +361,9 @@ export default function OnboardingPage() {
         recruiting_topics: areas,
         auto_resolve_declines: autoDecline,
         hold_when_at_capacity: holdAtCapacity,
+        custom_instructions: customInstructions.trim() || null,
+        institution: institution.trim() || null,
+        institution_country: institutionCountry.trim() || null,
       });
 
       if (user) {
@@ -779,6 +788,75 @@ export default function OnboardingPage() {
                 setAreas([...areas, target.value.trim()]);
                 target.value = '';
               }
+            }}
+          />
+        </div>
+
+        {sectionRule}
+
+        {/* — Institution — */}
+        <div style={{ marginBottom: '28px' }}>
+          {monoHeader('Institution (optional)')}
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 14px', maxWidth: '56ch' }}>
+            Used for feasibility checks — e.g. live visa/mobility lookups for international candidates. Skipped when unset.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px' }}>
+            <div>
+              <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '6px' }}>
+                University / institution
+              </label>
+              <input
+                type="text"
+                value={institution}
+                onChange={e => setInstitution(e.target.value)}
+                placeholder="e.g. Stanford University"
+                style={{
+                  width: '100%', boxSizing: 'border-box', padding: '0 12px', height: '40px',
+                  fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
+                  border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+                  background: 'var(--surface-card)', color: 'var(--text-body)', outline: 'none',
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '6px' }}>
+                Country
+              </label>
+              <input
+                type="text"
+                value={institutionCountry}
+                onChange={e => setInstitutionCountry(e.target.value)}
+                placeholder="e.g. United States"
+                style={{
+                  width: '100%', boxSizing: 'border-box', padding: '0 12px', height: '40px',
+                  fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)',
+                  border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+                  background: 'var(--surface-card)', color: 'var(--text-body)', outline: 'none',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {sectionRule}
+
+        {/* — Custom instructions — */}
+        <div style={{ marginBottom: '28px' }}>
+          {monoHeader('Custom instructions to the review board')}
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px', maxWidth: '56ch' }}>
+            A free-text directive the agents follow when triaging and debating candidates — your standing preferences in plain English. Optional.
+          </p>
+          <textarea
+            value={customInstructions}
+            onChange={e => setCustomInstructions(e.target.value)}
+            placeholder="e.g. I only take students with a strong theory background — deprioritise pure-applied ML. Prior publications matter more than GPA."
+            rows={4}
+            style={{
+              width: '100%', boxSizing: 'border-box', padding: '12px',
+              fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', lineHeight: '1.5',
+              border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+              background: 'var(--surface-card)', color: 'var(--text-body)', outline: 'none',
+              resize: 'vertical',
             }}
           />
         </div>

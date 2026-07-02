@@ -272,19 +272,26 @@ The professor returns to a queue and opens a borderline candidate to **replay** 
 
 ### Rubric map (engineering-weighted: depth 30 / innovation 30 / problem value 25 / presentation 15\)
 
+Weights confirmed against the official FAQ (2026-06-30). Track: **Agent Society**.
+
 | Rubric dimension | Where Parallax earns it |
 | :---- | :---- |
-| Technical depth (30) | Multi-round simultaneous debate with termination control; grounded RAG over two corpora; cheap/expensive triage split |
-| Innovation (30) | Perspective flip to the professor; society that *disagrees* and resolves; channel-agnostic intake abstraction |
-| Problem value (25) | Documented, growing pain (§ problem definition); a side no existing tool serves |
-| Presentation (15) | The debate-replay surface; the wow beat; clean before/after of noise→signal |
+| Innovation & AI creativity (30) | Perspective flip to the professor; society that *disagrees* and resolves; channel-agnostic intake abstraction; non-trivial structural logic and code modularity |
+| Technical depth & engineering (30) | Multi-round simultaneous debate with termination control; grounded RAG over two corpora; cheap/expensive triage split. **FAQ explicitly rewards: custom skills, MCP tools, and performance profiling** — the in-process MCP tool bus (§6) and skill-shaped agent tools are direct depth signals to build out |
+| Problem value & impact (25) | Documented, growing pain (§ problem definition); a side no existing tool serves; commercial/productization or open-source adoption path (revenue not required, but the scaling logic must be argued) |
+| Presentation & documentation (15) | The debate-replay surface; the wow beat; clean before/after of noise→signal; clarity of the architecture diagram |
 
 ### Hard deliverable criteria (hackathon)
 
-- Backend running on Alibaba Cloud \+ **separate** recording proving it. `[CONFIRM AT BUILD]` — capture early, not on the last day.  
-- Public open-source repo with a detectable license in the About section.  
-- Architecture diagram; 3-min demo video; optional blog post (low-effort prize insurance).  
-- **Nigeria eligibility check — still open and gating. Close before writing real code.**
+**Submission deadline: 2026-07-09, 2:00 PM PT — submit on Devpost.** No codebase edits after the boundary; judges evaluate the repo exactly as it stands at the deadline (fork if you want to keep optimizing). All items below are mandatory judging gates:
+
+- [ ] **Public source repo** with a detectable **open-source license file** visible in the About section (cloning another repo is banned).
+- [ ] **Live video demo, 1–3 min** on YouTube (public or unlisted), showing the multi-agent workflow running live.
+- [ ] **System architecture diagram** — data routes, model dependencies, tool calls, node structure.
+- [ ] **Written functional summary** — features, runtime behaviors, practical uses.
+- [ ] **Alibaba Cloud deployment verification** — console screenshot proving the backend runs live on Alibaba Cloud **ECS or SAS**. Capture early, not on the last day.
+
+**Mandatory tech constraint:** all core model calls must hit Qwen Cloud managed APIs (`dashscope-intl.aliyuncs.com`, or the Token-Plan routing host for `sk-sp-*` keys) — self-hosting Qwen weights or calling non-Qwen model endpoints is disqualifying. Orchestration frameworks (LangChain, LangGraph, Dify, MaxKB) are **explicitly permitted** as long as the model brain routes through the Qwen Cloud key.
 
 ---
 
@@ -293,7 +300,7 @@ The professor returns to a queue and opens a borderline candidate to **replay** 
 | \# | Decision | Status | Provisional default |
 | :---- | :---- | :---- | :---- |
 | 1 | Nigeria eligibility | **DONE** | — |
-| 2 | Agent framework (Qwen-Agent vs. alternative) | `[CONFIRM AT BUILD]` | Qwen-Agent |
+| 2 | Agent framework (Qwen-Agent vs. alternative) | **OPEN — now unblocked** | FAQ (2026-06-30) explicitly permits LangChain / LangGraph / Dify / MaxKB, provided the model brain routes through the Qwen Cloud key. Pick one and wire `NegotiationEngine` on top of it |
 | 3 | Debate round cap | `[CONFIRM AT BUILD]` | 3 |
 | 4 | Model per agent | `[CONFIRM AT BUILD]` | — |
 | 5 | Vector store \+ embedding model | `[CONFIRM AT BUILD]` | — |
@@ -317,6 +324,6 @@ This section documents the resolved infrastructure decisions. The principle gove
 | **Authentication** | Supabase Auth | Supabase | Professor login only (students are never users — §2); shares the Supabase project |
 | **Vector store** | pgvector extension | Supabase (same Postgres instance) | Closes decision \#5; one datastore for structured \+ vector data, no additional moving part |
 | **Object storage** | Cloudflare R2 | Cloudflare | Publication PDFs (§5.1) and CV attachments (§4.2); perpetual free tier, no egress fees |
-| **LLM inference** | Qwen models via DashScope | Alibaba Cloud | Sponsor-aligned; provisioned against trial credits |
+| **LLM inference** | Qwen models via DashScope (OpenAI-compatible) | Alibaba Cloud managed API | **Mandatory** — core model calls must hit `dashscope-intl.aliyuncs.com`; self-hosting weights or non-Qwen endpoints is disqualifying. **Token-Plan gotcha:** `sk-sp-*` keys must target `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` or every call 401s. Also toggle **off** the free-quota mode in the console or coupon credits never spend |
 | **Email intake** | Dedicated intake address \+ inbound parse webhook | Cloudflare Email Routing (preferred) or Postmark Inbound (fallback) | Every email to the intake address is definitionally outreach-intent — the professor publishes this address, not their personal inbox. Webhook POSTs parsed payload to FastAPI, which creates the Outreach shell and fires the Gatekeeper. A `POST /outreach` endpoint also accepts raw payloads directly for demo replay without live mail delivery. |
 | **Frontend** | Next.js / React | Vercel | Hobby tier; four surfaces only (§7) |

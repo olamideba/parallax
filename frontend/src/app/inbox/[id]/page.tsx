@@ -10,6 +10,7 @@ import { api, Outreach, Decision } from '@/lib/api';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { Tag } from '@/components/Tag';
+import { Loader } from '@/components/Loader';
 import { useIsMobile } from '@/lib/useMediaQuery';
 import { ArrowLeft, Check, X, AlertCircle, FileText, Send, Sparkles, AlertTriangle, RefreshCw, Play } from 'lucide-react';
 
@@ -23,6 +24,7 @@ export default function OutreachDetailPage() {
   const [outreach, setOutreach] = useState<Outreach | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
 
   // Override Form State
@@ -36,6 +38,10 @@ export default function OutreachDetailPage() {
   // Reply Composer State
   const [replyBody, setReplyBody] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+
+  // Maintenance actions (retriage / delete stub rows)
+  const [retriaging, setRetriaging] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -146,13 +152,46 @@ export default function OutreachDetailPage() {
     }
   };
 
+  const handleRetriage = async () => {
+    if (!outreach) return;
+    try {
+      setRetriaging(true);
+      setError(null);
+      const updated = await api.retriageOutreach(outreach.id);
+      setOutreach(updated);
+      setSuccessMsg('Re-queued for Gatekeeper triage.');
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to re-queue for triage.');
+    } finally {
+      setRetriaging(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!outreach) return;
+    if (!window.confirm('Permanently delete this outreach? This cannot be undone.')) return;
+    try {
+      setDeleting(true);
+      setError(null);
+      await api.deleteOutreach(outreach.id);
+      router.push('/inbox');
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete outreach.');
+      setDeleting(false);
+    }
+  };
+
   const openAttachment = async (index: number) => {
     if (!outreach) return;
+    setAttachmentError(null);
     try {
       const url = await api.getAttachmentUrl(outreach.id, index);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err: any) {
-      setError(err.message || 'Failed to open attachment.');
+      // Shown inline in the attachments block — the page-level banner sits far
+      // above the fold, so a failure there would be invisible to the reader.
+      setAttachmentError(err.message || 'Failed to open attachment.');
     }
   };
 
@@ -163,12 +202,7 @@ export default function OutreachDetailPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          <RefreshCw size={24} className="animate-spin" style={{ color: 'var(--navy-900)' }} />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>Loading candidate data...</span>
-        </div>
-      </div>
+      <Loader fullscreen width={160} label="Loading candidate data..." />
     );
   }
 
@@ -238,10 +272,23 @@ export default function OutreachDetailPage() {
         
         {/* Back Link & Notifications */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-          <Link href="/inbox" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
-            <ArrowLeft size={16} />
-            Back to Inbox review queue
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            <Link href="/inbox" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
+              <ArrowLeft size={16} />
+              Back to Inbox review queue
+            </Link>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Button variant="secondary" size="sm" onClick={handleRetriage} disabled={retriaging || deleting}>
+                <RefreshCw size={13} style={{ marginRight: 6 }} />
+                {retriaging ? 'Re-queuing...' : 'Re-run triage'}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleDelete} disabled={retriaging || deleting}>
+                <X size={13} style={{ marginRight: 6 }} />
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
+          </div>
 
           {successMsg && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 'var(--radius-md)', padding: '12px 16px', color: 'var(--status-verified-ink)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
@@ -363,6 +410,12 @@ export default function OutreachDetailPage() {
                       </button>
                     ))}
                   </div>
+                  {attachmentError && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--status-critical-ink)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)' }}>
+                      <AlertCircle size={13} style={{ flexShrink: 0 }} />
+                      <span>{attachmentError}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

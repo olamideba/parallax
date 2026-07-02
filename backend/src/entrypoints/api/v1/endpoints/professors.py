@@ -64,6 +64,9 @@ class UpdateProfessorRequest(BaseModel):
     gatekeeper_aggressiveness: float | None = None
     auto_resolve_declines: bool | None = None
     hold_when_at_capacity: bool | None = None
+    custom_instructions: str | None = None
+    institution: str | None = None
+    institution_country: str | None = None
 
 
 class PublicationInput(BaseModel):
@@ -90,6 +93,9 @@ def _professor_dict(p: ProfessorRecord) -> dict:
         "gatekeeper_aggressiveness": p.gatekeeper_aggressiveness,
         "auto_resolve_declines": p.auto_resolve_declines,
         "hold_when_at_capacity": p.hold_when_at_capacity,
+        "custom_instructions": p.custom_instructions,
+        "institution": p.institution,
+        "institution_country": p.institution_country,
     }
 
 
@@ -141,6 +147,13 @@ async def update_me(
         p.auto_resolve_declines = body.auto_resolve_declines
     if body.hold_when_at_capacity is not None:
         p.hold_when_at_capacity = body.hold_when_at_capacity
+    if body.custom_instructions is not None:
+        # Empty string clears the directive; any other value sets it.
+        p.custom_instructions = body.custom_instructions or None
+    if body.institution is not None:
+        p.institution = body.institution or None
+    if body.institution_country is not None:
+        p.institution_country = body.institution_country or None
 
     session.add(p)
     await session.commit()
