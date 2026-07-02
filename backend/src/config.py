@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     APP_ENV: str = Field(default="development")
     LOG_LEVEL: str = Field(default="DEBUG")
     API_V1_PREFIX: str = Field(default="/api/v1")
-    BACKEND_CORS_ORIGINS: list[str] = Field(default=["http://localhost:3000"])
+    BACKEND_CORS_ORIGINS: list[str] = Field(default=["https://parallax-five-chi.vercel.app","http://localhost:3000"])
 
     # Database
     DATABASE_URL: str | None = Field(default=None)

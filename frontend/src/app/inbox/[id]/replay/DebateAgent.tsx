@@ -2,17 +2,24 @@
 
 import React from 'react';
 import { AgentRole } from '@/lib/api';
-import { getSpritePath } from '@/lib/replay/assets';
+import { getSpritePath, SpriteDirection } from '@/lib/replay/assets';
 import { SEATS, ROLE_SEAT } from '@/lib/replay/seminarRoom';
 import styles from './replay.module.css';
 
 interface DebateAgentProps {
   role: AgentRole;
   speaking: boolean;
-  hasSpoken: boolean;
+  /** The active speaker cited this agent's earlier turn — do a reaction hop. */
+  referenced: boolean;
+  /** Which way to face right now (listeners turn toward the speaker). */
+  facing: SpriteDirection;
   dot: string;
+  /** Already typewriter-sliced by the page (deterministic off the playhead). */
   speechText?: string;
-  idleDelay?: number;
+  /** Still revealing characters — show the blinking caret. */
+  typing?: boolean;
+  /** Stagger for the one-shot entrance drop-in. */
+  entranceIndex?: number;
 }
 
 const SPRITE_HEIGHT = 96;
@@ -20,14 +27,18 @@ const SPRITE_HEIGHT = 96;
 export default function DebateAgent({
   role,
   speaking,
-  hasSpoken,
+  referenced,
+  facing,
   dot,
   speechText,
-  idleDelay = 0,
+  typing = false,
+  entranceIndex = 0,
 }: DebateAgentProps) {
   const { seatKey, sprite } = ROLE_SEAT[role];
   const seat = SEATS[seatKey];
-  const spriteSrc = getSpritePath(sprite, seat.facing);
+  const spriteSrc = getSpritePath(sprite, facing);
+  // Edge seats shift their bubble inward so it never clips the room border.
+  const bubbleAlign = seat.x < 24 ? 'left' : seat.x > 76 ? 'right' : 'center';
 
   return (
     <div
@@ -35,31 +46,43 @@ export default function DebateAgent({
       style={{
         left: `${seat.x}%`,
         top: `${seat.y}%`,
-        zIndex: seat.zIndex,
-        opacity: hasSpoken || speaking ? 1 : 0.45,
+        zIndex: speaking ? seat.zIndex + 100 : seat.zIndex,
       }}
     >
       {speaking && speechText && (
-        <div className={styles.speechBubble} style={{ borderColor: `${dot}66` }}>
-          {speechText.length > 110 ? `${speechText.slice(0, 110)}…` : speechText}
+        <div className={styles.bubblePositioner} data-align={bubbleAlign}>
+          <div
+            className={`${styles.speechBubble} ${typing ? styles.typingCaret : ''}`}
+            style={{ borderColor: `${dot}88` }}
+          >
+            {speechText}
+          </div>
         </div>
       )}
-      <div className={styles.charBodyGroup}>
+      <div
+        className={`${styles.charBodyGroup} ${speaking ? styles.speaking : ''}`}
+        style={{ animationDelay: `${entranceIndex * 0.12}s` }}
+      >
+        {speaking && <div className={styles.spotlight} style={{ background: dot }} />}
         <div className={styles.charShadow} />
-        <img
-          src={spriteSrc}
-          alt={role}
-          draggable={false}
-          className={`${styles.charSprite} ${speaking ? styles.active : ''}`}
-          style={{
-            height: SPRITE_HEIGHT,
-            width: 'auto',
-            animationDelay: `${idleDelay}s`,
-            filter: speaking
-              ? `drop-shadow(0 0 4px ${dot}) drop-shadow(0 0 1px #000)`
-              : 'drop-shadow(0 1px 1px rgba(0,0,0,0.5))',
-          }}
-        />
+        <div className={`${styles.spriteMotion} ${referenced ? styles.referenced : ''}`}>
+          <img
+            src={spriteSrc}
+            alt={role}
+            draggable={false}
+            className={`${styles.charSprite} ${speaking ? styles.active : ''}`}
+            style={{
+              height: SPRITE_HEIGHT,
+              width: 'auto',
+              // Varied idle rhythm so the room never bobs in unison.
+              animationDelay: `${entranceIndex * 0.45}s`,
+              animationDuration: speaking ? undefined : `${2.7 + entranceIndex * 0.35}s`,
+              filter: speaking
+                ? `drop-shadow(0 0 5px ${dot}) drop-shadow(0 0 1px #000)`
+                : 'drop-shadow(0 1px 1px rgba(0,0,0,0.5))',
+            }}
+          />
+        </div>
       </div>
     </div>
   );

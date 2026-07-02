@@ -1,11 +1,11 @@
+/* ── Stage ─────────────────────────────────────────────────────────────── */
+
 .roomStage {
   position: relative;
+  /* The stage CARD is aspect-locked (see page.tsx), so the room simply fills
+     it — no internal letterboxing. */
   width: 100%;
-  /* Lock to the canvas aspect ratio so neither image needs to crop or stretch.
-     Both PNGs are 1200×896; this makes the container the exact same shape. */
-  aspect-ratio: 1200 / 896;
-  flex-shrink: 0;
-  background: #0f1420;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -26,15 +26,22 @@
   height: auto;
 }
 
+/* ── Characters ────────────────────────────────────────────────────────── */
+
 .characterWrapper {
   position: absolute;
   transform: translate(-50%, -100%);
   pointer-events: none;
-  transition: opacity 250ms ease;
 }
 
 .charBodyGroup {
   position: relative;
+  transition: transform 220ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  animation: dropIn 480ms cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards;
+}
+
+.charBodyGroup.speaking {
+  transform: scale(1.07);
 }
 
 .charShadow {
@@ -42,10 +49,34 @@
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 22px;
-  height: 6px;
+  width: 24px;
+  height: 7px;
   background: rgba(0, 0, 0, 0.4);
   border-radius: 50%;
+}
+
+/* Colored, pulsing floor spotlight under the active speaker. */
+.spotlight {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 18px;
+  border-radius: 50%;
+  opacity: 0.55;
+  filter: blur(4px);
+  animation: spotlightPulse 1.4s ease-in-out infinite;
+}
+
+/* Inner motion layer: keeps ref-hop transforms off the img (which owns the
+   idle/talk animation) and off the wrapper (which owns positioning). */
+.spriteMotion {
+  position: relative;
+}
+
+.spriteMotion.referenced {
+  animation: refHop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) 2;
 }
 
 .charSprite {
@@ -55,39 +86,154 @@
 }
 
 .charSprite.active {
-  animation: talkBob 0.5s ease-in-out infinite alternate;
+  animation: talkBounce 0.42s ease-in-out infinite;
 }
 
-.speechBubble {
+/* ── Speech bubble (in-scene, typewritten) ─────────────────────────────── */
+
+/* Positioner owns placement + the tail; it shifts for edge seats so a
+   far-left/right speaker's bubble extends into the room instead of clipping.
+   The inner .speechBubble owns only the pop animation. */
+.bubblePositioner {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 10px);
+  width: max-content;
+  max-width: 230px;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.bubblePositioner[data-align='center'] {
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(15, 20, 40, 0.94);
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 6px;
-  padding: 5px 9px;
-  width: max-content;
-  max-width: 190px;
-  font-size: 10px;
-  font-family: var(--font-mono, monospace);
-  line-height: 1.35;
-  color: #e2e8f0;
-  text-align: center;
-  z-index: 50;
-  pointer-events: none;
-  animation: bubblePop 150ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.bubblePositioner[data-align='left'] {
+  left: 50%;
+  transform: translateX(-14%);
+}
+.bubblePositioner[data-align='right'] {
+  left: 50%;
+  transform: translateX(-86%);
 }
 
-.speechBubble::after {
+/* Tail always points down at the sprite center regardless of shift. */
+.bubblePositioner::after {
   content: '';
   position: absolute;
   top: 100%;
+  border: 5px solid transparent;
+  border-top-color: rgba(9, 14, 30, 0.95);
+}
+.bubblePositioner[data-align='center']::after {
   left: 50%;
   transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: rgba(15, 20, 40, 0.94);
 }
+.bubblePositioner[data-align='left']::after {
+  left: 14%;
+  transform: translateX(-50%);
+}
+.bubblePositioner[data-align='right']::after {
+  left: 86%;
+  transform: translateX(-50%);
+}
+
+.speechBubble {
+  background: rgba(9, 14, 30, 0.95);
+  border: 1px solid rgba(161, 171, 232, 0.4);
+  border-radius: 8px;
+  padding: 7px 10px;
+  min-width: 60px;
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.4;
+  color: #e7eaf6;
+  text-align: left;
+  transform-origin: bottom center;
+  animation: bubblePop 180ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.typingCaret::after {
+  content: '▌';
+  display: inline;
+  margin-left: 1px;
+  animation: caretBlink 0.7s steps(1) infinite;
+  color: #a1abe8;
+}
+
+/* ── Chat log (Slack-like) ─────────────────────────────────────────────── */
+
+.chatRow {
+  display: flex;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-md, 8px);
+  transition: background 200ms ease, box-shadow 200ms ease;
+  animation: rowIn 240ms ease-out backwards;
+}
+
+.chatRowFlash {
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.avatarBox {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  border: 1px solid rgba(6, 21, 49, 0.08);
+}
+
+.avatarSprite {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 92px;
+  width: auto;
+  image-rendering: pixelated;
+}
+
+/* ── Transport slider ──────────────────────────────────────────────────── */
+
+.scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--gray-200, #dee3ec);
+  outline: none;
+  cursor: pointer;
+}
+
+.scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--navy-900, #061531);
+  border: 2px solid #fefefe;
+  box-shadow: 0 1px 3px rgba(6, 21, 49, 0.35);
+  transition: transform 120ms ease;
+}
+
+.scrubber::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+}
+
+.scrubber::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--navy-900, #061531);
+  border: 2px solid #fefefe;
+  box-shadow: 0 1px 3px rgba(6, 21, 49, 0.35);
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────── */
 
 @keyframes idleBob {
   0%,
@@ -99,22 +245,99 @@
   }
 }
 
-@keyframes talkBob {
-  0% {
-    transform: translateY(0);
-  }
+@keyframes talkBounce {
+  0%,
   100% {
-    transform: translateY(-2px);
+    transform: translateY(0) scaleY(1);
+  }
+  30% {
+    transform: translateY(-3px) scaleY(1.015);
+  }
+  60% {
+    transform: translateY(-1px) scaleY(0.99);
   }
 }
 
 @keyframes bubblePop {
   0% {
-    transform: translateX(-50%) scale(0.6);
+    transform: scale(0.6) translateY(4px);
     opacity: 0;
   }
   100% {
-    transform: translateX(-50%) scale(1);
+    transform: scale(1) translateY(0);
     opacity: 1;
+  }
+}
+
+@keyframes spotlightPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateX(-50%) scaleX(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: translateX(-50%) scaleX(0.82);
+  }
+}
+
+@keyframes refHop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-7px);
+  }
+  70% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes dropIn {
+  0% {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes caretBlink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes rowIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Accessibility ─────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .charSprite,
+  .charSprite.active,
+  .spriteMotion.referenced,
+  .charBodyGroup,
+  .spotlight,
+  .speechBubble,
+  .chatRow {
+    animation: none !important;
+    transition: none !important;
   }
 }
