@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from loguru import logger
@@ -16,6 +16,12 @@ from src.domain.models.outreach import (
     Outreach,
     OutreachStatus,
 )
+
+# Window for content-based duplicate detection. Guards against upstream
+# duplicate delivery (e.g. the sending MTA retrying SMTP before Resend's
+# receiving MX acks fast enough) that shows up as distinct provider events —
+# each with its own provider_message_id — for what is actually one email.
+_DUPLICATE_WINDOW = timedelta(minutes=10)
 
 
 class ProcessInboundEmailUseCase:
@@ -45,6 +51,38 @@ class ProcessInboundEmailUseCase:
             logger.warning("Inbound email for unknown intake address: {}", inbound.recipient)
             return None
 
+        # Idempotency #1: the same provider event redelivered (webhook retry).
+        if inbound.provider_message_id:
+            existing = await self._outreach_repo.get_by_provider_message_id(
+                inbound.provider_message_id
+            )
+            if existing is not None:
+                logger.info(
+                    "Duplicate webhook for email {} — reusing outreach {}",
+                    inbound.provider_message_id,
+                    existing.id,
+                )
+                return existing
+
+        # Idempotency #2: a genuinely distinct provider event for what is the
+        # same underlying email (e.g. upstream MTA retry before the provider's
+        # receiving MX). No shared provider id to key off, so match on identical
+        # sender/subject/body from the same professor within a short window.
+        duplicate = await self._outreach_repo.find_recent_duplicate(
+            professor_id=professor.id,
+            sender_email=inbound.sender_email,
+            subject=inbound.subject,
+            body=inbound.text_body,
+            since=datetime.now(UTC) - _DUPLICATE_WINDOW,
+        )
+        if duplicate is not None:
+            logger.info(
+                "Duplicate inbound email from {} — reusing outreach {}",
+                inbound.sender_email,
+                duplicate.id,
+            )
+            return duplicate
+
         channel = (
             SYSTEM_CONFIRMATION_CHANNEL
             if inbound.is_system_confirmation
@@ -62,6 +100,7 @@ class ProcessInboundEmailUseCase:
             body=inbound.text_body,
             body_html=inbound.html_body,
             attachment_keys=attachments,
+            provider_message_id=inbound.provider_message_id,
             received_at=datetime.now(UTC),
             status=OutreachStatus.PENDING_TRIAGE,
         )

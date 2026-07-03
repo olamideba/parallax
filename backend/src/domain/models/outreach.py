@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -68,6 +68,10 @@ class Outreach(BaseModel):
     body: str
     body_html: str | None = None
     attachment_keys: list[Attachment] = Field(default_factory=list)
+    # The inbound provider's id for this specific received-email event (e.g.
+    # Resend's `email_id`). Lets ingestion recognize a redelivered webhook for
+    # the same event before minting a duplicate Outreach.
+    provider_message_id: str | None = None
     received_at: datetime
     status: OutreachStatus = OutreachStatus.PENDING_TRIAGE
     replied_at: datetime | None = None
@@ -80,3 +84,7 @@ class Outreach(BaseModel):
     triage_reason: str | None = None
     debate_trace_id: UUID | None = None
     decision: Decision | None = None
+    # True creation time — carried through every read/save round trip (a
+    # fresh value here would get pushed into the DB on the next update, since
+    # the repository reconstructs and merges a new record on every save()).
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
