@@ -3,7 +3,7 @@
 import React from 'react';
 import { AgentRole } from '@/lib/api';
 import { getSpritePath, SpriteDirection } from '@/lib/replay/assets';
-import { SEATS, ROLE_SEAT } from '@/lib/replay/seminarRoom';
+import { SEATS, ROLE_SEAT, TABLE_CENTER } from '@/lib/replay/seminarRoom';
 import styles from './replay.module.css';
 
 interface DebateAgentProps {
@@ -39,6 +39,13 @@ export default function DebateAgent({
   const spriteSrc = getSpritePath(sprite, facing);
   // Edge seats shift their bubble inward so it never clips the room border.
   const bubbleAlign = seat.x < 24 ? 'left' : seat.x > 76 ? 'right' : 'center';
+  // Speaking agents take a small step toward the table — unit vector to center.
+  const dx = TABLE_CENTER.x - seat.x;
+  const dy = TABLE_CENTER.y - seat.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const stepTransform = speaking
+    ? `translate(${((dx / len) * 8).toFixed(1)}px, ${((dy / len) * 5).toFixed(1)}px) scale(1.07)`
+    : undefined;
 
   return (
     <div
@@ -61,7 +68,7 @@ export default function DebateAgent({
       )}
       <div
         className={`${styles.charBodyGroup} ${speaking ? styles.speaking : ''}`}
-        style={{ animationDelay: `${entranceIndex * 0.12}s` }}
+        style={{ animationDelay: `${entranceIndex * 0.12}s`, transform: stepTransform }}
       >
         {speaking && <div className={styles.spotlight} style={{ background: dot }} />}
         <div className={styles.charShadow} />

@@ -5,7 +5,7 @@ import operator
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
@@ -18,6 +18,11 @@ from uuid6 import uuid7
 
 from src.adapters.mcp.tools.publication_retriever import PublicationRetriever
 from src.adapters.qwen_cloud.chat_model import get_chat_model
+from src.adapters.qwen_cloud.personas import (
+    DEBATER_PERSONAS,
+    first_name,
+    persona_for,
+)
 from src.adapters.qwen_cloud.templates import render_prompt
 from src.adapters.qwen_cloud.tool_registry import tools_for_role
 from src.config import get_settings
@@ -34,7 +39,11 @@ from src.domain.models.society import (
     Receipt,
 )
 
-_DEBATER_ROLES = (AgentRole.ADVOCATE, AgentRole.AUDITOR, AgentRole.ASSESSOR)
+_DEBATER_ROLES: tuple[AgentRole, ...] = (
+    AgentRole.ADVOCATE,
+    AgentRole.AUDITOR,
+    AgentRole.ASSESSOR,
+)
 _RECEIPT_RE = re.compile(r'\[RECEIPT:\s*"([^"]+)"\s*,\s*"([^"]+)"\]')
 _REF_RE = re.compile(r"\[REF:\s*(\d+)\]")
 
@@ -53,9 +62,21 @@ class ArbitratorRuling(BaseModel):
     drafted_reply: str = Field(description="A short, professional email reply to the candidate.")
 
 
+class _ModeratorChoice(BaseModel):
+    """The facilitator's routing decision for the next turn (MAD-style judge)."""
+
+    next_speaker: Literal["advocate", "auditor", "assessor", "end"]
+    reason: str = Field(description="One short clause on why, for the trace.")
+
+
 class _DebateState(TypedDict):
     turns: Annotated[list[DebateTurn], operator.add]
+    dispatched: Annotated[list[str], operator.add]
     round: int
+    spoken_this_round: list[str]
+    next_speaker: str
+    consecutive_passes: int
+    turn_count: int
     decision: Decision | None
 
 
@@ -75,13 +96,26 @@ def _parse_references(content: str, transcript_len: int) -> list[int]:
     return sorted(n for n in refs if 0 <= n < transcript_len)
 
 
-class LangGraphNegotiationEngine(NegotiationEngine):
-    """LangGraph implementation of the simultaneous multi-round debate.
+def _first_unspoken(dispatched: set[str]) -> str:
+    for role in _DEBATER_ROLES:
+        if role.value not in dispatched:
+            return role.value
+    return _DEBATER_ROLES[0].value
 
-    Per round, the three debaters run in one parallel superstep over a shared
-    append-only transcript (reducer state); each may PASS. The loop exits at
-    the round cap or when a whole round passes, then the Arbitrator judges the
-    transcript once and drafts the reply.
+
+class LangGraphNegotiationEngine(NegotiationEngine):
+    """LangGraph implementation of the debate as a moderator-driven exchange
+    (Liang et al. 2023, Multi-Agent Debate / MAD): debaters take sequential
+    turns over one shared, append-only transcript — each sees everything said
+    so far and rebuts it directly — while a lightweight Moderator (the cheap
+    triage model acting as MAD's judge) routes the floor to whoever can best
+    advance the argument and calls the debate when it stops being productive.
+
+    This replaces the old simultaneous-talk scheme (ChatEval's least
+    conversational strategy) where the three debaters spoke in parallel each
+    round, blind to one another. Termination stays bounded: the Moderator can
+    only end once every debater has held the floor at least once, and a hard
+    turn cap (round_cap * debaters) backstops it regardless.
     """
 
     def __init__(
@@ -112,11 +146,27 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             "capacity": professor.capacity,
             "institution": professor.institution,
             "institution_country": professor.institution_country,
+            # Persona layer — agents address each other and the professor by name.
+            "cast": DEBATER_PERSONAS,
+            "professor_first_name": first_name(professor.display_name),
         }
+
+        # Seed the transcript with the Gatekeeper explaining why this outreach was
+        # let through, so the debaters can build on (or push back against) it.
+        opening = await self._gatekeeper_opening(outreach, base_context)
 
         graph = self._build_graph(retrieval_tool, base_context, settings.DEBATE_MAX_TOOL_ROUNDS)
         final_state: _DebateState = await graph.ainvoke(
-            {"turns": [], "round": 1, "decision": None}
+            {
+                "turns": [opening] if opening else [],
+                "dispatched": [],
+                "round": 1,
+                "spoken_this_round": [],
+                "next_speaker": "",
+                "consecutive_passes": 0,
+                "turn_count": 0,
+                "decision": None,
+            }
         )
 
         decision = final_state["decision"]
@@ -150,67 +200,113 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         base_context: dict[str, Any],
         max_tool_rounds: int,
     ):
-        async def _debater(role: AgentRole, state: _DebateState) -> dict:
+        max_turns = self.round_cap * len(_DEBATER_ROLES)
+
+        async def moderator(state: _DebateState) -> dict:
+            return await self._moderate(state, base_context, max_turns)
+
+        async def speak(state: _DebateState) -> dict:
+            role = AgentRole(state["next_speaker"])
+            transcript = state["turns"]
+
+            # Soft round grouping for the replay: a "round" is a wave in which
+            # each role speaks at most once; looping back to a role starts one.
+            round_number = state["round"]
+            spoken_this_round = list(state["spoken_this_round"])
+            if role.value in spoken_this_round:
+                round_number += 1
+                spoken_this_round = []
+            spoken_this_round.append(role.value)
+
             turn = await self._debater_turn(
-                role, state, retrieval_tool, base_context, max_tool_rounds
+                role, transcript, round_number, retrieval_tool, base_context, max_tool_rounds
             )
-            return {"turns": [turn]} if turn else {"turns": []}
-
-        async def advocate(state: _DebateState) -> dict:
-            return await _debater(AgentRole.ADVOCATE, state)
-
-        async def auditor(state: _DebateState) -> dict:
-            return await _debater(AgentRole.AUDITOR, state)
-
-        async def assessor(state: _DebateState) -> dict:
-            return await _debater(AgentRole.ASSESSOR, state)
-
-        def gate(state: _DebateState) -> dict:
-            return {}
-
-        def route(state: _DebateState) -> str:
-            spoke_this_round = any(t.round == state["round"] for t in state["turns"])
-            if state["round"] >= self.round_cap or not spoke_this_round:
-                return "arbitrator"
-            return "advance"
-
-        def advance(state: _DebateState) -> dict:
-            return {"round": state["round"] + 1}
+            passed = turn is None
+            return {
+                "turns": [] if passed else [turn],
+                "dispatched": [role.value],
+                "round": round_number,
+                "spoken_this_round": spoken_this_round,
+                "consecutive_passes": state["consecutive_passes"] + 1 if passed else 0,
+                "turn_count": state["turn_count"] + 1,
+            }
 
         async def arbitrator(state: _DebateState) -> dict:
             return await self._arbitrate(state, base_context)
 
-        builder = StateGraph(_DebateState)
-        builder.add_node("advocate", advocate)
-        builder.add_node("auditor", auditor)
-        builder.add_node("assessor", assessor)
-        builder.add_node("gate", gate)
-        builder.add_node("advance", advance)
-        builder.add_node("arbitrator", arbitrator)
+        def route(state: _DebateState) -> str:
+            return "arbitrator" if state["next_speaker"] == "end" else "speak"
 
-        for role in ("advocate", "auditor", "assessor"):
-            builder.add_edge(START, role)
-            builder.add_edge(role, "gate")
-            builder.add_edge("advance", role)
+        builder = StateGraph(_DebateState)
+        builder.add_node("moderator", moderator)
+        builder.add_node("speak", speak)
+        builder.add_node("arbitrator", arbitrator)
+        builder.add_edge(START, "moderator")
         builder.add_conditional_edges(
-            "gate", route, {"advance": "advance", "arbitrator": "arbitrator"}
+            "moderator", route, {"speak": "speak", "arbitrator": "arbitrator"}
         )
+        builder.add_edge("speak", "moderator")
         builder.add_edge("arbitrator", END)
         return builder.compile()
+
+    async def _moderate(
+        self, state: _DebateState, base_context: dict[str, Any], max_turns: int
+    ) -> dict:
+        """Pick who holds the floor next, or END. The floor only closes once
+        every debater has spoken at least once; a hard turn cap and an
+        all-passed check backstop the model so the debate always terminates."""
+        dispatched = set(state["dispatched"])
+        all_heard = {r.value for r in _DEBATER_ROLES} <= dispatched
+
+        # Hard safety nets — never let the model run the debate forever.
+        if state["turn_count"] >= max_turns:
+            return {"next_speaker": "end"}
+        if all_heard and state["consecutive_passes"] >= len(_DEBATER_ROLES):
+            return {"next_speaker": "end"}
+        if not all_heard and state["consecutive_passes"] >= len(_DEBATER_ROLES):
+            return {"next_speaker": _first_unspoken(dispatched)}
+
+        prompt = render_prompt(
+            "moderator.j2",
+            prior_turns=state["turns"],
+            dispatched=sorted(dispatched),
+            all_heard=all_heard,
+            **base_context,
+        )
+        model = self._chat_model_factory(AgentRole.GATEKEEPER).with_structured_output(
+            _ModeratorChoice
+        )
+        try:
+            result = await model.ainvoke(prompt)
+            choice = (
+                result
+                if isinstance(result, _ModeratorChoice)
+                else _ModeratorChoice(**dict(result))
+            )
+            pick: str = choice.next_speaker
+        except Exception as exc:  # noqa: BLE001 — fall back to a safe rotation
+            logger.warning("Moderator routing failed, falling back: {}", exc)
+            pick = "end" if all_heard else _first_unspoken(dispatched)
+
+        # The model may only end after every voice has been heard once.
+        if pick == "end" and not all_heard:
+            pick = _first_unspoken(dispatched)
+        return {"next_speaker": pick}
 
     async def _debater_turn(
         self,
         role: AgentRole,
-        state: _DebateState,
+        transcript: list[DebateTurn],
+        round_number: int,
         retrieval_tool: BaseTool,
         base_context: dict[str, Any],
         max_tool_rounds: int,
     ) -> DebateTurn | None:
-        transcript = state["turns"]
         prompt = render_prompt(
             f"{role.value}.j2",
-            round_number=state["round"],
+            round_number=round_number,
             prior_turns=transcript,
+            persona=persona_for(role),
             **base_context,
         )
         tools = tools_for_role(role, retrieval_tool)
@@ -252,7 +348,7 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             return None
 
         return DebateTurn(
-            round=state["round"],
+            round=round_number,
             role=role,
             content=content,
             receipts=_parse_receipts(content) + tool_receipts,
@@ -298,17 +394,58 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             )
         return result
 
+    async def _gatekeeper_opening(
+        self, outreach: Outreach, base_context: dict[str, Any]
+    ) -> DebateTurn | None:
+        """A short, in-character opening from the Gatekeeper on *why* this
+        outreach earned a debate. Skipped (returns None) when triage recorded no
+        reason (e.g. legacy rows); the debate then simply opens with the Advocate."""
+        reason = outreach.triage_reason
+        if not reason:
+            return None
+        prompt = render_prompt(
+            "gatekeeper_opening.j2",
+            triage_reason=reason,
+            persona=persona_for(AgentRole.GATEKEEPER),
+            **base_context,
+        )
+        model = self._chat_model_factory(AgentRole.GATEKEEPER)
+        try:
+            response = await model.ainvoke([HumanMessage(content=prompt)])
+            content = str(response.content).strip()
+        except Exception as exc:  # noqa: BLE001 — never let the opening block the debate
+            logger.warning("Gatekeeper opening failed, using stored reason: {}", exc)
+            content = ""
+        if not content:
+            content = reason
+        return DebateTurn(
+            round=1,
+            role=AgentRole.GATEKEEPER,
+            content=content,
+            created_at=datetime.now(UTC),
+        )
+
     async def _arbitrate(self, state: _DebateState, base_context: dict[str, Any]) -> dict:
         prompt = render_prompt(
             "arbitrator.j2",
             prior_turns=state["turns"],
             round_cap=self.round_cap,
+            persona=persona_for(AgentRole.ARBITRATOR),
             custom_instructions=base_context.get("custom_instructions"),
+            cast=base_context.get("cast"),
+            professor_first_name=base_context.get("professor_first_name"),
         )
         model = self._chat_model_factory(AgentRole.ARBITRATOR).with_structured_output(
             ArbitratorRuling
         )
+        # Qwen's structured output is occasionally flaky on a long transcript
+        # (returns a reasoning-only message that parses to None). The debate
+        # can't resolve without a ruling, so retry once before giving up.
         result = await model.ainvoke(prompt)
+        if result is None:
+            result = await model.ainvoke(prompt)
+        if result is None:
+            raise DebateError("Arbitrator returned no structured ruling")
         ruling = (
             result if isinstance(result, ArbitratorRuling) else ArbitratorRuling(**dict(result))
         )

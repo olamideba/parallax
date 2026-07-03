@@ -114,6 +114,8 @@ async def test_promote_sets_profile_and_leaves_pending() -> None:
     assert repo.saved is not None
     assert repo.saved.status == OutreachStatus.PENDING_TRIAGE
     assert repo.saved.decision is None
+    # The promote reason survives for the Gatekeeper's debate-opening turn.
+    assert repo.saved.triage_reason == "Clear AI-safety alignment."
     assert repo.saved.extracted_profile.name == "Jonathan Vance"
     assert repo.saved.extracted_claims[0].text == "published at NeurIPS 2025"
     # Professor context reached the gatekeeper.

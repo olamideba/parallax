@@ -10,6 +10,7 @@ from langchain_core.tools import tool
 from src.adapters.orchestration.langgraph_engine import (
     ArbitratorRuling,
     LangGraphNegotiationEngine,
+    _ModeratorChoice,
 )
 from src.domain.models.outreach import (
     ExtractedClaim,
@@ -24,23 +25,33 @@ from src.domain.models.society import ActionKind, AgentRole
 
 
 class FakeStructured:
-    def __init__(self, ruling: ArbitratorRuling) -> None:
-        self._ruling = ruling
+    """Serves a structured-output value: a single object, or a list popped per
+    call (used to script the Moderator's per-turn routing choices)."""
+
+    def __init__(self, value) -> None:  # noqa: ANN001
+        self._value = value
         self.last_prompt: str | None = None
 
     async def ainvoke(self, prompt):  # noqa: ANN001
         self.last_prompt = prompt
-        return self._ruling
+        if isinstance(self._value, list):
+            return self._value.pop(0)
+        return self._value
 
 
 class FakeChatModel:
-    """Pops one scripted response per ainvoke call; bind_tools is a no-op."""
+    """Pops one scripted response per ainvoke call; bind_tools is a no-op.
 
-    def __init__(self, responses: list, ruling: ArbitratorRuling | None = None) -> None:
-        self._responses = responses
+    `structured` backs `with_structured_output` — an ArbitratorRuling for the
+    Arbitrator model, or a list of _ModeratorChoice for the Moderator model.
+    """
+
+    def __init__(self, responses: list | None = None, structured=None) -> None:  # noqa: ANN001
+        self._responses = responses or []
         self._structured = FakeStructured(
-            ruling
-            or ArbitratorRuling(
+            structured
+            if structured is not None
+            else ArbitratorRuling(
                 label="request_more_info", rationale="default", drafted_reply="dear"
             )
         )
@@ -56,6 +67,14 @@ class FakeChatModel:
             return AIMessage(content="PASS")
         item = self._responses.pop(0)
         return AIMessage(content=item) if isinstance(item, str) else item
+
+
+def _moderator(*picks: str) -> FakeChatModel:
+    """A Moderator that routes the floor to `picks` in order (each a role value
+    or "end"). The engine's hard caps backstop it once the picks run out."""
+    return FakeChatModel(
+        structured=[_ModeratorChoice(next_speaker=p, reason="test") for p in picks]
+    )
 
 
 @tool
@@ -136,17 +155,18 @@ def _ruling(label: str = "invite") -> ArbitratorRuling:
 @pytest.mark.asyncio
 async def test_all_pass_after_round_one_terminates_early() -> None:
     models = {
+        AgentRole.GATEKEEPER: _moderator("advocate", "auditor", "assessor", "end"),
         AgentRole.ADVOCATE: FakeChatModel(["Alignment is real.", "PASS"]),
         AgentRole.AUDITOR: FakeChatModel(["Claim 1: VERIFIED — ok.", "PASS"]),
         AgentRole.ASSESSOR: FakeChatModel(["One slot open.", "PASS"]),
-        AgentRole.ARBITRATOR: FakeChatModel([], ruling=_ruling("invite")),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling("invite")),
     }
     outreach = _outreach()
     outcome = await _engine(models, round_cap=3).run(outreach, _professor(outreach.professor_id))
 
     roles = [t.role for t in outcome.trace.turns]
     assert roles.count(AgentRole.ARBITRATOR) == 1
-    # 3 debater turns in round 1, none in round 2 (all passed).
+    # Each debater is heard once, then the Moderator ends the debate.
     debater_turns = [t for t in outcome.trace.turns if t.role != AgentRole.ARBITRATOR]
     assert len(debater_turns) == 3
     assert all(t.round == 1 for t in debater_turns)
@@ -156,19 +176,24 @@ async def test_all_pass_after_round_one_terminates_early() -> None:
 
 
 @pytest.mark.asyncio
-async def test_round_cap_terminates_persistent_disagreement() -> None:
+async def test_hard_turn_cap_terminates_persistent_disagreement() -> None:
     talk = ["arguing"] * 10  # never passes
+    # The Moderator keeps routing the floor; the engine's hard cap
+    # (round_cap * debaters = 6) forces termination regardless.
     models = {
+        AgentRole.GATEKEEPER: _moderator(
+            "advocate", "auditor", "assessor", "advocate", "auditor", "assessor"
+        ),
         AgentRole.ADVOCATE: FakeChatModel(list(talk)),
         AgentRole.AUDITOR: FakeChatModel(list(talk)),
         AgentRole.ASSESSOR: FakeChatModel(list(talk)),
-        AgentRole.ARBITRATOR: FakeChatModel([], ruling=_ruling("request_more_info")),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling("request_more_info")),
     }
     outreach = _outreach()
     outcome = await _engine(models, round_cap=2).run(outreach, _professor(outreach.professor_id))
 
     debater_turns = [t for t in outcome.trace.turns if t.role != AgentRole.ARBITRATOR]
-    assert len(debater_turns) == 6  # 3 debaters x 2 rounds, hard stop
+    assert len(debater_turns) == 6  # hard cap = round_cap(2) * debaters(3)
     assert outcome.trace.terminated_at_round == 2
     assert outcome.trace.round_cap == 2
 
@@ -179,10 +204,11 @@ async def test_receipts_and_references_are_parsed_from_content() -> None:
         'Fit is genuine [RECEIPT: "Attention Paper", "the exact excerpt"]. See [REF:0].'
     )
     models = {
+        AgentRole.GATEKEEPER: _moderator("advocate", "auditor", "assessor", "end"),
         AgentRole.ADVOCATE: FakeChatModel([advocate_text, "PASS"]),
         AgentRole.AUDITOR: FakeChatModel(["audit.", "PASS"]),
         AgentRole.ASSESSOR: FakeChatModel(["capacity fine.", "PASS"]),
-        AgentRole.ARBITRATOR: FakeChatModel([], ruling=_ruling()),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
     }
     outreach = _outreach()
     outcome = await _engine(models).run(outreach, _professor(outreach.professor_id))
@@ -190,17 +216,21 @@ async def test_receipts_and_references_are_parsed_from_content() -> None:
     advocate_turn = next(t for t in outcome.trace.turns if t.role == AgentRole.ADVOCATE)
     assert advocate_turn.receipts[0].source_title == "Attention Paper"
     assert advocate_turn.receipts[0].chunk_text == "the exact excerpt"
-    # Round 1 has no prior turns, so REF:0 is out of range and dropped.
+    # The Advocate opens, so its turn has no prior turns — REF:0 is out of range
+    # and dropped.
     assert advocate_turn.references_turn_ids == []
 
 
 @pytest.mark.asyncio
-async def test_second_round_references_resolve_against_transcript() -> None:
+async def test_later_turn_references_resolve_against_transcript() -> None:
+    # Advocate opens (idx 0), Auditor (idx 1), Assessor (idx 2), then the
+    # Moderator hands the Advocate the floor again to rebut turn 1.
     models = {
+        AgentRole.GATEKEEPER: _moderator("advocate", "auditor", "assessor", "advocate", "end"),
         AgentRole.ADVOCATE: FakeChatModel(["opening case.", "Rebutting [REF:1]."]),
         AgentRole.AUDITOR: FakeChatModel(["opening audit.", "PASS"]),
         AgentRole.ASSESSOR: FakeChatModel(["opening assessment.", "PASS"]),
-        AgentRole.ARBITRATOR: FakeChatModel([], ruling=_ruling()),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
     }
     outreach = _outreach()
     outcome = await _engine(models, round_cap=2).run(outreach, _professor(outreach.professor_id))
@@ -223,10 +253,11 @@ async def test_tool_calls_record_actions_and_receipts() -> None:
         ],
     )
     models = {
+        AgentRole.GATEKEEPER: _moderator("advocate", "auditor", "assessor", "end"),
         AgentRole.ADVOCATE: FakeChatModel([tool_call_msg, "Found strong overlap.", "PASS"]),
         AgentRole.AUDITOR: FakeChatModel(["audit.", "PASS"]),
         AgentRole.ASSESSOR: FakeChatModel(["fine.", "PASS"]),
-        AgentRole.ARBITRATOR: FakeChatModel([], ruling=_ruling()),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
     }
     outreach = _outreach()
     outcome = await _engine(models).run(outreach, _professor(outreach.professor_id))
@@ -244,10 +275,11 @@ async def test_tool_calls_record_actions_and_receipts() -> None:
 async def test_baseline_retrieval_query_built_from_profile_and_claims() -> None:
     retriever = FakeRetriever()
     models = {
+        AgentRole.GATEKEEPER: _moderator("advocate", "auditor", "assessor", "end"),
         AgentRole.ADVOCATE: FakeChatModel(["case.", "PASS"]),
         AgentRole.AUDITOR: FakeChatModel(["audit.", "PASS"]),
         AgentRole.ASSESSOR: FakeChatModel(["fine.", "PASS"]),
-        AgentRole.ARBITRATOR: FakeChatModel([], ruling=_ruling()),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
     }
     outreach = _outreach()
     await _engine(models, retriever=retriever).run(outreach, _professor(outreach.professor_id))
@@ -258,12 +290,58 @@ async def test_baseline_retrieval_query_built_from_profile_and_claims() -> None:
 
 
 @pytest.mark.asyncio
-async def test_arbitrator_closing_turn_appended_with_rationale() -> None:
+async def test_gatekeeper_opening_seeds_transcript_when_reason_present() -> None:
+    # The Gatekeeper model serves two roles: a plain opening statement, then the
+    # structured Moderator routing for the rest of the debate.
     models = {
+        AgentRole.GATEKEEPER: FakeChatModel(
+            responses=["I let this one through — the RAG work is a real thread."],
+            structured=[
+                _ModeratorChoice(next_speaker=p, reason="test")
+                for p in ("advocate", "auditor", "assessor", "end")
+            ],
+        ),
         AgentRole.ADVOCATE: FakeChatModel(["case.", "PASS"]),
         AgentRole.AUDITOR: FakeChatModel(["audit.", "PASS"]),
         AgentRole.ASSESSOR: FakeChatModel(["fine.", "PASS"]),
-        AgentRole.ARBITRATOR: FakeChatModel([], ruling=_ruling("decline")),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
+    }
+    outreach = _outreach()
+    outreach.triage_reason = "Plausible alignment with the professor's RAG work."
+    outcome = await _engine(models).run(outreach, _professor(outreach.professor_id))
+
+    first = outcome.trace.turns[0]
+    assert first.role == AgentRole.GATEKEEPER
+    assert first.round == 1
+    assert "thread" in first.content
+    # The debaters follow the Gatekeeper's opening.
+    assert outcome.trace.turns[1].role == AgentRole.ADVOCATE
+
+
+@pytest.mark.asyncio
+async def test_no_gatekeeper_opening_when_reason_absent() -> None:
+    models = {
+        AgentRole.GATEKEEPER: _moderator("advocate", "auditor", "assessor", "end"),
+        AgentRole.ADVOCATE: FakeChatModel(["case.", "PASS"]),
+        AgentRole.AUDITOR: FakeChatModel(["audit.", "PASS"]),
+        AgentRole.ASSESSOR: FakeChatModel(["fine.", "PASS"]),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
+    }
+    outreach = _outreach()  # triage_reason defaults to None
+    outcome = await _engine(models).run(outreach, _professor(outreach.professor_id))
+
+    assert outcome.trace.turns[0].role == AgentRole.ADVOCATE
+    assert all(t.role != AgentRole.GATEKEEPER for t in outcome.trace.turns)
+
+
+@pytest.mark.asyncio
+async def test_arbitrator_closing_turn_appended_with_rationale() -> None:
+    models = {
+        AgentRole.GATEKEEPER: _moderator("advocate", "auditor", "assessor", "end"),
+        AgentRole.ADVOCATE: FakeChatModel(["case.", "PASS"]),
+        AgentRole.AUDITOR: FakeChatModel(["audit.", "PASS"]),
+        AgentRole.ASSESSOR: FakeChatModel(["fine.", "PASS"]),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling("decline")),
     }
     outreach = _outreach()
     outcome = await _engine(models).run(outreach, _professor(outreach.professor_id))

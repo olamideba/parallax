@@ -96,6 +96,7 @@ async def retriage_outreach(
     outreach_id: UUID,
     current_professor: CurrentProfessorDep,
     outreach_repo: OutreachRepoDep,
+    trace_repo: TraceRepoDep,
 ) -> GlobalResponse:
     """Reset an outreach to `pending_triage` and re-enqueue the Gatekeeper.
 
@@ -105,8 +106,13 @@ async def retriage_outreach(
     if not outreach or outreach.professor_id != current_professor.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
 
+    # Drop the prior debate trace(s) so the replay never shows a stale run after
+    # the re-triage produces a fresh one.
+    await trace_repo.delete_by_outreach_id(outreach_id)
+
     outreach.status = OutreachStatus.PENDING_TRIAGE
     outreach.triage_verdict = None
+    outreach.triage_reason = None
     outreach.decision = None
     outreach.extracted_profile = None
     outreach.extracted_claims = []

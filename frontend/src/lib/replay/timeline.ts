@@ -94,10 +94,13 @@ export function ledgerCounts(entries: LedgerEntry[]): Record<ReceiptStatus, numb
 
 // Mirrors the --agent-N lane tokens in colors.css (hex literals kept so
 // alpha-suffix compositing like `${dot}22` works in inline styles).
-export const ROLE_META: Record<AgentRole, { label: string; dot: string; ink: string; bg: string }> = {
-  advocate: { label: 'Fit Analyst', dot: '#4F5BB8', ink: '#3C46A0', bg: '#ECEEFA' },      // --agent-1
-  auditor: { label: 'Claim Verifier', dot: '#2F7D72', ink: '#236258', bg: '#E5F1EF' },    // --agent-2
-  assessor: { label: 'Capacity & Scope', dot: '#9A6326', ink: '#7E501C', bg: '#F5EDE2' }, // --agent-3
-  arbitrator: { label: 'Synthesis', dot: '#6E5B92', ink: '#574576', bg: '#F0EDF6' },      // --agent-4
-  gatekeeper: { label: 'Gatekeeper', dot: '#6C7589', ink: '#4B5468', bg: '#EEF1F6' },     // gray lane
+// `label` is the agent's human name (shown prominently); `title` is its role,
+// shown as a small badge. Names mirror the backend personas
+// (backend/src/adapters/qwen_cloud/personas.py) — keep the two in sync.
+export const ROLE_META: Record<AgentRole, { label: string; title: string; dot: string; ink: string; bg: string }> = {
+  advocate: { label: 'leslie', title: 'Advocate', dot: '#4F5BB8', ink: '#3C46A0', bg: '#ECEEFA' },      // --agent-1
+  auditor: { label: 'karen', title: 'Auditor', dot: '#2F7D72', ink: '#236258', bg: '#E5F1EF' },    // --agent-2
+  assessor: { label: 'lami', title: 'Assessor', dot: '#9A6326', ink: '#7E501C', bg: '#F5EDE2' }, // --agent-3
+  arbitrator: { label: 'dumbledore', title: 'Arbitrator', dot: '#6E5B92', ink: '#574576', bg: '#F0EDF6' },      // --agent-4
+  gatekeeper: { label: 'kumar', title: 'Gatekeeper', dot: '#6C7589', ink: '#4B5468', bg: '#EEF1F6' },     // gray lane
 };
