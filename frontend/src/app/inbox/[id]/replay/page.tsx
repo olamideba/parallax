@@ -33,7 +33,7 @@ import {
 import DebateAgent from './DebateAgent';
 import { Loader } from '@/components/Loader';
 import { useIsMobile } from '@/lib/useMediaQuery';
-import { ROOM_BG, TABLE_SPRITE, getSpritePath, SpriteDirection } from '@/lib/replay/assets';
+import { ROOM_BG, TABLE_SPRITE, getSpritePath } from '@/lib/replay/assets';
 import { TABLE_CSS, SEATS, ROLE_SEAT } from '@/lib/replay/seminarRoom';
 import styles from './replay.module.css';
 
@@ -49,16 +49,62 @@ function fmt(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** Listeners turn toward the active speaker; the speaker keeps their seat facing.
- *  Preserves the seat's depth component (front/rear) so heads turn naturally. */
-function facingFor(role: AgentRole, speaker: AgentRole | null): SpriteDirection {
-  const def = SEATS[ROLE_SEAT[role].seatKey].facing;
-  if (!speaker || speaker === role) return def;
-  const me = SEATS[ROLE_SEAT[role].seatKey];
-  const sp = SEATS[ROLE_SEAT[speaker].seatKey];
-  if (Math.abs(sp.x - me.x) < 3) return def;
-  const depth = def.split('-')[0] as 'front' | 'rear';
-  return `${depth}-${sp.x > me.x ? 'right' : 'left'}` as SpriteDirection;
+/** In-scene bubble text: prose only — markers and markdown belong in the log. */
+function cleanForBubble(text: string): string {
+  return text
+    .replace(/\[RECEIPT:\s*"[^"]*"\s*,\s*"[^"]*"\]/g, '')
+    .replace(/\[REF:\s*\d+\]/g, '')
+    .replace(/\*\*/g, '')
+    .replace(/\s*PASS\s*$/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/** Light inline rendering for chat messages: **bold**, [REF:n] chips (colored
+ *  by the referenced agent), [RECEIPT: "title", "…"] chips. */
+function renderInline(text: string, turns: DebateTurn[]): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|\[REF:\s*\d+\]|\[RECEIPT:\s*"[^"]*"\s*,\s*"[^"]*"\])/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    const ref = part.match(/^\[REF:\s*(\d+)\]$/);
+    if (ref) {
+      const turn = turns[Number(ref[1])];
+      const meta = turn ? ROLE_META[turn.role] : null;
+      return (
+        <span
+          key={i}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3, verticalAlign: 'baseline',
+            fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+            color: meta?.ink ?? 'var(--text-muted)', background: meta?.bg ?? 'var(--surface-muted)',
+            borderRadius: 4, padding: '0 5px', margin: '0 1px',
+          }}
+        >
+          ↩ {meta?.label ?? `#${ref[1]}`}
+        </span>
+      );
+    }
+    const receipt = part.match(/^\[RECEIPT:\s*"([^"]*)"\s*,\s*"[^"]*"\]$/);
+    if (receipt) {
+      return (
+        <span
+          key={i}
+          title={part}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3, verticalAlign: 'baseline',
+            fontFamily: 'var(--font-mono)', fontSize: 10,
+            color: 'var(--status-verified-ink)', background: 'var(--status-verified-bg)',
+            borderRadius: 4, padding: '0 5px', margin: '0 1px',
+          }}
+        >
+          ❞ {receipt[1]}
+        </span>
+      );
+    }
+    return part;
+  });
 }
 
 export default function DebateReplayPage() {
@@ -74,6 +120,16 @@ export default function DebateReplayPage() {
   const [playheadMs, setPlayheadMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+
+  // Seat-tuning mode (?pos): shows seat markers; click the room to copy coords.
+  const [tune, setTune] = useState(false);
+  const [lastClick, setLastClick] = useState<string | null>(null);
+  useEffect(() => {
+    // Read the URL after mount (not in a lazy initializer) so SSR and the
+    // client's first render agree — avoids a hydration mismatch on ?pos.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTune(new URLSearchParams(window.location.search).has('pos'));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,11 +191,22 @@ export default function DebateReplayPage() {
   const atStart = playheadMs === 0 && !playing;
   const finalTurn = turns[turns.length - 1];
 
-  // Typewriter: characters revealed so far in the active bubble.
-  const revealed = activeBeat ? Math.max(0, Math.floor((playheadMs - activeBeat.startMs) / REVEAL_MS_PER_CHAR)) : 0;
-  const bubbleFull = activeTurn ? activeTurn.content.slice(0, BUBBLE_MAX_CHARS) : '';
-  const bubbleShown = bubbleFull.slice(0, revealed) + (activeTurn && activeTurn.content.length > BUBBLE_MAX_CHARS && revealed >= BUBBLE_MAX_CHARS ? '…' : '');
+  // Typewriter: characters revealed so far in the active bubble — cleaned prose,
+  // word-boundary slicing, and a lead-in so it never opens on a lone word.
+  const bubbleClean = activeTurn ? cleanForBubble(activeTurn.content) : '';
+  const bubbleFull = bubbleClean.slice(0, BUBBLE_MAX_CHARS);
+  const revealed = activeBeat
+    ? Math.max(0, 18 + Math.floor((playheadMs - activeBeat.startMs) / REVEAL_MS_PER_CHAR))
+    : 0;
   const bubbleTyping = revealed < bubbleFull.length;
+  let bubbleShown = bubbleFull.slice(0, revealed);
+  if (bubbleTyping) {
+    // Don't cut mid-word: trim back to the last space (keep at least something).
+    const cut = bubbleShown.replace(/\S+$/, '');
+    if (cut.trim().length > 0) bubbleShown = cut;
+  } else if (bubbleClean.length > BUBBLE_MAX_CHARS) {
+    bubbleShown += '…';
+  }
 
   // Which agents does the active speaker cite right now? They react in-scene.
   const referencedRoles = useMemo(() => {
@@ -242,7 +309,28 @@ export default function DebateReplayPage() {
               : { height: '100%', width: 'auto', maxWidth: '100%', flexShrink: 0 }),
           }}
         >
-          <div className={styles.roomStage}>
+          <div
+            className={styles.roomStage}
+            onClick={(e) => {
+              if (!tune) return;
+              const r = e.currentTarget.getBoundingClientRect();
+              const x = ((e.clientX - r.left) / r.width) * 100;
+              const y = ((e.clientY - r.top) / r.height) * 100;
+              const snippet = `x: ${x.toFixed(1)}, y: ${y.toFixed(1)}, zIndex: ${Math.round(y)}`;
+              setLastClick(snippet);
+              navigator.clipboard?.writeText(snippet).catch(() => {});
+              console.log('[seat-tune]', snippet);
+            }}
+            style={{
+              // Camera drift: gentle push-in toward whoever is speaking.
+              transform: speakerRole ? 'scale(1.05)' : 'scale(1)',
+              transformOrigin: speakerRole
+                ? `${SEATS[ROLE_SEAT[speakerRole].seatKey].x}% ${SEATS[ROLE_SEAT[speakerRole].seatKey].y}%`
+                : '50% 50%',
+              transition: 'transform 900ms ease, transform-origin 900ms ease',
+              cursor: tune ? 'crosshair' : undefined,
+            }}
+          >
             <img src={ROOM_BG} alt="" className={styles.roomBackground} />
             <img
               src={TABLE_SPRITE}
@@ -259,7 +347,7 @@ export default function DebateReplayPage() {
                   role={role}
                   speaking={isActive}
                   referenced={referencedRoles.has(role)}
-                  facing={facingFor(role, speakerRole)}
+                  facing={SEATS[ROLE_SEAT[role].seatKey].facing}
                   dot={meta.dot}
                   speechText={isActive ? bubbleShown : undefined}
                   typing={isActive && bubbleTyping}
@@ -267,7 +355,28 @@ export default function DebateReplayPage() {
                 />
               );
             })}
+            {/* Seat markers in tuning mode: feet crosshair + label per seat. */}
+            {tune &&
+              SEAT_ORDER.map((role) => {
+                const seat = SEATS[ROLE_SEAT[role].seatKey];
+                return (
+                  <div key={`tune-${role}`} style={{ position: 'absolute', left: `${seat.x}%`, top: `${seat.y}%`, transform: 'translate(-50%, -50%)', zIndex: 500, pointerEvents: 'none' }}>
+                    <div style={{ width: 10, height: 10, border: `2px solid ${ROLE_META[role].dot}`, borderRadius: '50%', background: 'rgba(255,255,255,0.7)' }} />
+                    <span style={{ position: 'absolute', left: 12, top: -4, fontFamily: 'var(--font-mono)', fontSize: 9, color: '#fff', background: 'rgba(0,0,0,0.75)', padding: '1px 4px', borderRadius: 3, whiteSpace: 'nowrap' }}>
+                      {role} {seat.x},{seat.y}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
+
+          {/* Tuning HUD: last clicked coordinates (also copied + logged). */}
+          {tune && (
+            <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 600, fontFamily: 'var(--font-mono)', fontSize: 11, color: '#fff', background: 'rgba(0,0,0,0.8)', padding: '6px 10px', borderRadius: 6 }}>
+              SEAT TUNER · click the room to copy coords
+              {lastClick && <div style={{ color: '#A1ABE8', marginTop: 3 }}>{lastClick}</div>}
+            </div>
+          )}
 
           {/* Start overlay — a proper opening beat instead of a bare caption. */}
           {atStart && (
@@ -373,6 +482,7 @@ export default function DebateReplayPage() {
                   )}
                   <ChatMessage
                     turn={t}
+                    allTurns={turns}
                     meta={meta}
                     time={fmt(beats[i]?.startMs ?? 0)}
                     active={isActiveMsg}
@@ -450,12 +560,14 @@ function RoleAvatar({ role, bg }: { role: AgentRole; bg: string }) {
 
 function ChatMessage({
   turn,
+  allTurns,
   meta,
   time,
   active,
   flash,
 }: {
   turn: DebateTurn;
+  allTurns: DebateTurn[];
   meta: (typeof ROLE_META)[AgentRole];
   time: string;
   active: boolean;
@@ -481,7 +593,7 @@ function ChatMessage({
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-subtle)' }}>{time}</span>
         </div>
         <p style={{ margin: '3px 0 0', fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-body)', lineHeight: 1.5, overflowWrap: 'break-word' }}>
-          {turn.content}
+          {renderInline(turn.content, allTurns)}
         </p>
         <ActionChips actions={turn.actions} />
       </div>

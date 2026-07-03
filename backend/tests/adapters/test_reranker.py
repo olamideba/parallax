@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -29,20 +31,23 @@ def _configure_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_rerank_builds_workspace_scoped_url_and_parses_results(
+async def test_rerank_hits_native_endpoint_and_parses_results(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
+        captured["body"] = json.loads(request.content)
         return httpx.Response(
             200,
             json={
-                "results": [
-                    {"index": 1, "relevance_score": 0.93},
-                    {"index": 0, "relevance_score": 0.41},
-                ]
+                "output": {
+                    "results": [
+                        {"index": 1, "relevance_score": 0.93},
+                        {"index": 0, "relevance_score": 0.41},
+                    ]
+                }
             },
         )
 
@@ -51,8 +56,14 @@ async def test_rerank_builds_workspace_scoped_url_and_parses_results(
     reranker = QwenReranker()
     results = await reranker.rerank("AI safety", ["doc a", "doc b"], top_n=2)
 
-    assert "ws-test123.ap-southeast-1.maas.aliyuncs.com" in captured["url"]
-    assert captured["url"].endswith("/compatible-mode/v1/reranks")
+    # Native DashScope rerank service on the same host as chat/embeddings —
+    # NOT the workspace subdomain (which 404s).
+    assert captured["url"] == (
+        "https://dashscope-intl.aliyuncs.com"
+        "/api/v1/services/rerank/text-rerank/text-rerank"
+    )
+    assert captured["body"]["input"] == {"query": "AI safety", "documents": ["doc a", "doc b"]}
+    assert captured["body"]["parameters"]["top_n"] == 2
     assert [r.index for r in results] == [1, 0]
     assert results[0].relevance_score == 0.93
 
@@ -64,9 +75,9 @@ async def test_rerank_returns_empty_for_no_documents() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rerank_without_workspace_id_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("DASHSCOPE_WORKSPACE_ID", "")
+async def test_rerank_without_api_key_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "")
     get_settings.cache_clear()
     reranker = QwenReranker()
-    with pytest.raises(ExternalToolError, match="DASHSCOPE_WORKSPACE_ID"):
+    with pytest.raises(ExternalToolError, match="DASHSCOPE_API_KEY"):
         await reranker.rerank("query", ["doc"])

@@ -40,9 +40,7 @@
   animation: dropIn 480ms cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards;
 }
 
-.charBodyGroup.speaking {
-  transform: scale(1.07);
-}
+/* Speaking scale + step-in is applied inline (vector toward the table). */
 
 .charShadow {
   position: absolute;
@@ -53,6 +51,12 @@
   height: 7px;
   background: rgba(0, 0, 0, 0.4);
   border-radius: 50%;
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+
+.charBodyGroup.speaking .charShadow {
+  transform: translateX(-50%) scaleX(1.25);
+  opacity: 0.85;
 }
 
 /* Colored, pulsing floor spotlight under the active speaker. */
@@ -176,8 +180,8 @@
 }
 
 .avatarBox {
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   border-radius: 7px;
   overflow: hidden;
   position: relative;
@@ -187,7 +191,7 @@
 
 .avatarSprite {
   position: absolute;
-  top: -4px;
+  top: 3px;
   left: 50%;
   transform: translateX(-50%);
   height: 92px;
@@ -238,10 +242,10 @@
 @keyframes idleBob {
   0%,
   100% {
-    transform: translateY(0);
+    transform: translateY(0) scaleY(1);
   }
   50% {
-    transform: translateY(-2px);
+    transform: translateY(-2px) scaleY(1.006);
   }
 }
 

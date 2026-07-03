@@ -44,7 +44,10 @@ async def lookup_student_mobility(country: str, destination_country: str) -> dic
                 "model": settings.QWEN_MODEL_DEBATE,
                 "messages": [{"role": "user", "content": prompt}],
                 "enable_search": True,
-                "search_options": {"search_strategy": "agent"},
+                "search_options": {"forced_search": True},
+                # Web search + thinking mode is unsupported for non-streaming
+                # calls (DashScope 400s); we only need the grounded summary.
+                "enable_thinking": False,
             },
         )
         resp.raise_for_status()
