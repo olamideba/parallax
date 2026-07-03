@@ -75,5 +75,8 @@ class Outreach(BaseModel):
     extracted_profile: ExtractedProfile | None = None
     extracted_claims: list[ExtractedClaim] = Field(default_factory=list)
     triage_verdict: TriageVerdict | None = None
+    # The Gatekeeper's one-sentence justification for the verdict. Kept for both
+    # verdicts so the debate can open with *why* this outreach was let through.
+    triage_reason: str | None = None
     debate_trace_id: UUID | None = None
     decision: Decision | None = None

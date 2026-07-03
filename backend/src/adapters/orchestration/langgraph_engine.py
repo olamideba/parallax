@@ -18,6 +18,11 @@ from uuid6 import uuid7
 
 from src.adapters.mcp.tools.publication_retriever import PublicationRetriever
 from src.adapters.qwen_cloud.chat_model import get_chat_model
+from src.adapters.qwen_cloud.personas import (
+    DEBATER_PERSONAS,
+    first_name,
+    persona_for,
+)
 from src.adapters.qwen_cloud.templates import render_prompt
 from src.adapters.qwen_cloud.tool_registry import tools_for_role
 from src.config import get_settings
@@ -141,12 +146,19 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             "capacity": professor.capacity,
             "institution": professor.institution,
             "institution_country": professor.institution_country,
+            # Persona layer — agents address each other and the professor by name.
+            "cast": DEBATER_PERSONAS,
+            "professor_first_name": first_name(professor.display_name),
         }
+
+        # Seed the transcript with the Gatekeeper explaining why this outreach was
+        # let through, so the debaters can build on (or push back against) it.
+        opening = await self._gatekeeper_opening(outreach, base_context)
 
         graph = self._build_graph(retrieval_tool, base_context, settings.DEBATE_MAX_TOOL_ROUNDS)
         final_state: _DebateState = await graph.ainvoke(
             {
-                "turns": [],
+                "turns": [opening] if opening else [],
                 "dispatched": [],
                 "round": 1,
                 "spoken_this_round": [],
@@ -294,6 +306,7 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             f"{role.value}.j2",
             round_number=round_number,
             prior_turns=transcript,
+            persona=persona_for(role),
             **base_context,
         )
         tools = tools_for_role(role, retrieval_tool)
@@ -381,12 +394,46 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             )
         return result
 
+    async def _gatekeeper_opening(
+        self, outreach: Outreach, base_context: dict[str, Any]
+    ) -> DebateTurn | None:
+        """A short, in-character opening from the Gatekeeper on *why* this
+        outreach earned a debate. Skipped (returns None) when triage recorded no
+        reason (e.g. legacy rows); the debate then simply opens with the Advocate."""
+        reason = outreach.triage_reason
+        if not reason:
+            return None
+        prompt = render_prompt(
+            "gatekeeper_opening.j2",
+            triage_reason=reason,
+            persona=persona_for(AgentRole.GATEKEEPER),
+            **base_context,
+        )
+        model = self._chat_model_factory(AgentRole.GATEKEEPER)
+        try:
+            response = await model.ainvoke([HumanMessage(content=prompt)])
+            content = str(response.content).strip()
+        except Exception as exc:  # noqa: BLE001 — never let the opening block the debate
+            logger.warning("Gatekeeper opening failed, using stored reason: {}", exc)
+            content = ""
+        if not content:
+            content = reason
+        return DebateTurn(
+            round=1,
+            role=AgentRole.GATEKEEPER,
+            content=content,
+            created_at=datetime.now(UTC),
+        )
+
     async def _arbitrate(self, state: _DebateState, base_context: dict[str, Any]) -> dict:
         prompt = render_prompt(
             "arbitrator.j2",
             prior_turns=state["turns"],
             round_cap=self.round_cap,
+            persona=persona_for(AgentRole.ARBITRATOR),
             custom_instructions=base_context.get("custom_instructions"),
+            cast=base_context.get("cast"),
+            professor_first_name=base_context.get("professor_first_name"),
         )
         model = self._chat_model_factory(AgentRole.ARBITRATOR).with_structured_output(
             ArbitratorRuling

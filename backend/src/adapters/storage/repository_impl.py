@@ -76,6 +76,7 @@ def _record_to_outreach(r: OutreachRecord) -> Outreach:
         status=OutreachStatus(r.status),
         replied_at=r.replied_at,
         triage_verdict=TriageVerdict(r.triage_verdict) if r.triage_verdict else None,
+        triage_reason=r.triage_reason,
         debate_trace_id=r.debate_trace_id,
         extracted_profile=(
             ExtractedProfile.model_validate_json(r.extracted_profile_json)
@@ -106,6 +107,7 @@ def _outreach_to_record(o: Outreach) -> OutreachRecord:
         status=o.status.value,
         replied_at=o.replied_at,
         triage_verdict=o.triage_verdict,
+        triage_reason=o.triage_reason,
         debate_trace_id=o.debate_trace_id,
         decision_label=o.decision.label if o.decision else None,
         decision_rationale=o.decision.rationale if o.decision else None,
@@ -308,11 +310,23 @@ class SqlDebateTraceRepository(DebateTraceRepository):
         return _record_to_trace(merged)
 
     async def get_by_outreach_id(self, outreach_id: UUID) -> DebateTrace | None:
+        # A re-triage mints a fresh trace; order by start so the latest run wins
+        # even if stale rows linger (belt-and-suspenders with delete-on-retriage).
         result = await self._session.exec(
-            select(DebateTraceRecord).where(DebateTraceRecord.outreach_id == outreach_id)
+            select(DebateTraceRecord)
+            .where(DebateTraceRecord.outreach_id == outreach_id)
+            .order_by(DebateTraceRecord.started_at.desc())
         )
         record = result.first()
         return _record_to_trace(record) if record else None
+
+    async def delete_by_outreach_id(self, outreach_id: UUID) -> None:
+        result = await self._session.exec(
+            select(DebateTraceRecord).where(DebateTraceRecord.outreach_id == outreach_id)
+        )
+        for record in result.all():
+            await self._session.delete(record)
+        await self._session.commit()
 
 
 class SqlPublicationRepository(PublicationRepository):

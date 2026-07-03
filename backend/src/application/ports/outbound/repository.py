@@ -59,6 +59,11 @@ class DebateTraceRepository(ABC):
     async def get_by_outreach_id(self, outreach_id: UUID) -> DebateTrace | None:
         raise NotImplementedError
 
+    @abstractmethod
+    async def delete_by_outreach_id(self, outreach_id: UUID) -> None:
+        """Remove all traces for an outreach (e.g. before a re-triage reruns it)."""
+        raise NotImplementedError
+
 
 class PublicationRepository(ABC):
     @abstractmethod

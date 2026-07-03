@@ -77,6 +77,9 @@ class TriageOutreachUseCase:
             ExtractedClaim(text=text) for text in assessment.claim_texts
         ]
         outreach.triage_verdict = assessment.verdict
+        # Kept for both verdicts: on promote the debate opens with the Gatekeeper
+        # explaining why this outreach earned a hearing.
+        outreach.triage_reason = assessment.reason
 
         if assessment.verdict == TriageVerdict.REJECT:
             # Land in the "Declined" tab, overridable by the professor.

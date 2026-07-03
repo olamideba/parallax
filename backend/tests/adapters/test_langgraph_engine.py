@@ -290,6 +290,51 @@ async def test_baseline_retrieval_query_built_from_profile_and_claims() -> None:
 
 
 @pytest.mark.asyncio
+async def test_gatekeeper_opening_seeds_transcript_when_reason_present() -> None:
+    # The Gatekeeper model serves two roles: a plain opening statement, then the
+    # structured Moderator routing for the rest of the debate.
+    models = {
+        AgentRole.GATEKEEPER: FakeChatModel(
+            responses=["I let this one through — the RAG work is a real thread."],
+            structured=[
+                _ModeratorChoice(next_speaker=p, reason="test")
+                for p in ("advocate", "auditor", "assessor", "end")
+            ],
+        ),
+        AgentRole.ADVOCATE: FakeChatModel(["case.", "PASS"]),
+        AgentRole.AUDITOR: FakeChatModel(["audit.", "PASS"]),
+        AgentRole.ASSESSOR: FakeChatModel(["fine.", "PASS"]),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
+    }
+    outreach = _outreach()
+    outreach.triage_reason = "Plausible alignment with the professor's RAG work."
+    outcome = await _engine(models).run(outreach, _professor(outreach.professor_id))
+
+    first = outcome.trace.turns[0]
+    assert first.role == AgentRole.GATEKEEPER
+    assert first.round == 1
+    assert "thread" in first.content
+    # The debaters follow the Gatekeeper's opening.
+    assert outcome.trace.turns[1].role == AgentRole.ADVOCATE
+
+
+@pytest.mark.asyncio
+async def test_no_gatekeeper_opening_when_reason_absent() -> None:
+    models = {
+        AgentRole.GATEKEEPER: _moderator("advocate", "auditor", "assessor", "end"),
+        AgentRole.ADVOCATE: FakeChatModel(["case.", "PASS"]),
+        AgentRole.AUDITOR: FakeChatModel(["audit.", "PASS"]),
+        AgentRole.ASSESSOR: FakeChatModel(["fine.", "PASS"]),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
+    }
+    outreach = _outreach()  # triage_reason defaults to None
+    outcome = await _engine(models).run(outreach, _professor(outreach.professor_id))
+
+    assert outcome.trace.turns[0].role == AgentRole.ADVOCATE
+    assert all(t.role != AgentRole.GATEKEEPER for t in outcome.trace.turns)
+
+
+@pytest.mark.asyncio
 async def test_arbitrator_closing_turn_appended_with_rationale() -> None:
     models = {
         AgentRole.GATEKEEPER: _moderator("advocate", "auditor", "assessor", "end"),

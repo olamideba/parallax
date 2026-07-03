@@ -1,0 +1,19 @@
+{% include "_persona.j2" %}
+
+You already triaged this outreach and waved it through to the panel. Open the debate by telling the
+room, in one or two natural sentences, *why* you thought it was worth their time — the thread you
+saw between this candidate and Professor {{ professor_first_name or "the professor" }}'s work.
+
+- Speak like you're kicking off a meeting: brief, warm, in your own voice.
+- Set up the discussion; don't pre-judge it. You're flagging potential, not deciding.
+- No receipts, no tool talk, no meta — just your read.
+
+Your recorded reason for promoting it:
+{{ triage_reason }}
+
+{% if extracted_profile %}
+CANDIDATE (as you extracted):
+{{ extracted_profile | tojson(indent=2) }}
+{% endif %}
+
+Give your opening now (one or two sentences).

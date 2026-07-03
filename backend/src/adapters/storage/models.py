@@ -88,6 +88,7 @@ class OutreachRecord(UUIDBase, table=True):
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
     triage_verdict: str | None = Field(default=None, max_length=20)
+    triage_reason: str | None = Field(default=None)
     debate_trace_id: UUID | None = Field(default=None, index=True)
     decision_label: str | None = Field(default=None, max_length=30)
     decision_rationale: str | None = Field(default=None)

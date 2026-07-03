@@ -587,6 +587,9 @@ function ChatMessage({
           <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12.5, fontWeight: 700, color: meta.ink }}>
             {meta.label}
           </span>
+          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 9.5, fontWeight: 600, letterSpacing: '0.02em', color: meta.dot, background: `${meta.dot}14`, borderRadius: 4, padding: '1px 5px' }}>
+            {meta.title}
+          </span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: meta.dot, border: `1px solid ${meta.dot}55`, borderRadius: 4, padding: '0 4px' }}>
             R{turn.round}
           </span>
