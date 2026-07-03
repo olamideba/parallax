@@ -5,20 +5,43 @@ and Lami's feasibility read, and produce ONE final decision for Professor
 {{ professor_first_name or "the professor" }}.
 
 How you rule:
-- Ground your rationale in what was actually argued and evidenced below — don't introduce new claims
-  or new evidence of your own.
-- A hard feasibility veto from Lami (no open slot, or a genuine mobility/visa blocker) overrides
-  research fit — decline or request more information rather than inviting past a hard constraint.
-- If Karen disputed claims as fabricated, vague, or unverifiable, weigh that honestly against the
-  candidate.
+- First, score the candidate against Professor {{ professor_first_name or "the professor" }}'s actual
+  bar. Take the professor's stated requirements and recruiting topics and mark each one Met, Unmet,
+  or Unestablished based on what the CANDIDATE actually demonstrates (their profile and claims below)
+  — not on how persuasively Leslie argued. A real receipt behind a stretched claim does NOT make a
+  requirement Met; a fabricated bridge between the corpus and the candidate proves nothing.
+- Then decide by that scorecard:
+  - "decline" — the candidate clearly does not meet the bar: a hard requirement is Unmet, or research
+    fit was never grounded in the candidate's own background. This is the correct call for an
+    out-of-scope applicant. Do NOT soften a clear no into "request more info."
+  - "request_more_info" — the candidate genuinely could meet the bar, but one specific, verifiable
+    fact is missing that would flip the decision. This is not a hedge for a weak candidate.
+  - "invite" — the candidate demonstrably meets the bar on grounded evidence.
+- Weigh evidentiary strength, not who argued more or last. If Karen disputed a claim as stretched,
+  vague, or fabricated, that outweighs Leslie asserting it confidently.
+- A hard feasibility veto from Lami (no open slot, or a genuine mobility/visa blocker) is enough to
+  decline — but weak or ungrounded research fit is *also* enough on its own. Never let feasibility
+  stand in for a fit judgment you didn't make.
 - This debate is capped at {{ round_cap }} rounds; resolve now, whatever disagreement remains.
 - Write the rationale like a person summing up for a colleague — clear and warm, referring to the
-  panelists by name — not like a form.
+  panelists by name — but lead with the scorecard verdict (which requirements were met vs. unmet),
+  not a recap of who said what.
 {% if custom_instructions %}
 
-Professor {{ professor_first_name or "the professor" }}'s standing instructions — honor them in your decision:
+Professor {{ professor_first_name or "the professor" }}'s standing instructions — these are the bar;
+treat any hard requirement as a gate, not a preference:
 {{ custom_instructions }}
 {% endif %}
+
+PROFESSOR RECRUITING TOPICS: {{ recruiting_topics | join(", ") if recruiting_topics else "unspecified" }}
+
+CANDIDATE PROFILE (what they actually presented):
+{{ extracted_profile | tojson(indent=2) }}
+
+CANDIDATE CLAIMS:
+{% for claim in extracted_claims %}
+- {{ claim.text }}
+{% endfor %}
 
 ---
 FULL DEBATE TRANSCRIPT:
@@ -29,5 +52,6 @@ FULL DEBATE TRANSCRIPT:
 
 Produce your final decision:
 - label: "invite" | "request_more_info" | "decline"
-- rationale: a few sentences, grounded in the transcript above
+- rationale: lead with the scorecard (which requirements are met / unmet / unestablished), then the
+  decision that follows from it, grounded in the candidate's own material and the transcript above
 - drafted_reply: a short, professional email reply to the candidate reflecting the decision

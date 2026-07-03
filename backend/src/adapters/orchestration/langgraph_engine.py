@@ -426,6 +426,7 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         )
 
     async def _arbitrate(self, state: _DebateState, base_context: dict[str, Any]) -> dict:
+        capacity = base_context.get("capacity")
         prompt = render_prompt(
             "arbitrator.j2",
             prior_turns=state["turns"],
@@ -434,6 +435,12 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             custom_instructions=base_context.get("custom_instructions"),
             cast=base_context.get("cast"),
             professor_first_name=base_context.get("professor_first_name"),
+            # The Arbitrator scores the candidate against the professor's bar
+            # directly — so it needs the raw profile/claims/topics, not just the
+            # debaters' framing of them (guards against an unchallenged stretch).
+            extracted_profile=base_context.get("extracted_profile"),
+            extracted_claims=base_context.get("extracted_claims"),
+            recruiting_topics=capacity.recruiting_topics if capacity else [],
         )
         model = self._chat_model_factory(AgentRole.ARBITRATOR).with_structured_output(
             ArbitratorRuling
