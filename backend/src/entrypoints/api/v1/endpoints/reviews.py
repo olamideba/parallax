@@ -227,6 +227,11 @@ async def override_decision(
         drafted_reply=body.drafted_reply,
         overridden_by_professor=True,
     )
+    # The professor is now actively deciding this one — pull it back into the
+    # review queue even if it had auto-resolved (rejected), so the override is
+    # actionable rather than stranded in a terminal tab.
+    if outreach.status == OutreachStatus.REJECTED:
+        outreach.status = OutreachStatus.AWAITING_REVIEW
     saved = await outreach_repo.save(outreach)
     return GlobalResponse(data=saved.model_dump(mode="json"), message="Decision overridden")
 

@@ -74,8 +74,19 @@ def persona_for(role: AgentRole) -> Persona:
     return PERSONAS[role]
 
 
+_TITLE_PREFIXES = {"dr", "prof", "professor", "mr", "mrs", "ms", "sir", "madam"}
+
+
 def first_name(display_name: str | None) -> str | None:
-    """Best-effort first name for addressing the professor ("Professor John")."""
+    """Best-effort first name for addressing the professor ("Professor John").
+
+    Strips a leading title so "Dr. Jane Smith" yields "Jane", not "Dr." — the
+    naive first-token split was rendering agent lines like "Professor Dr.'s
+    explicit preference" for professors who entered their name with a title.
+    """
     if not display_name or not display_name.strip():
         return None
-    return display_name.strip().split()[0]
+    for token in display_name.strip().split():
+        if token.strip(".").lower() not in _TITLE_PREFIXES:
+            return token
+    return None

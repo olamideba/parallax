@@ -1,11 +1,20 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, text
 from sqlmodel import Field, Relationship, SQLModel
 from uuid6 import uuid7
+
+
+def _now_column() -> Column:
+    # A fresh Column instance per call — a `Column` object can only ever be
+    # attached to one Table, so this must NOT be hoisted onto a shared mixin
+    # inherited by multiple `table=True` classes (that's exactly the "Column
+    # object already assigned to Table" error). Each table below calls this
+    # itself to get its own Column.
+    return Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
 
 
 class UUIDBase(SQLModel):
@@ -36,6 +45,8 @@ class ProfessorRecord(SQLModel, table=True):
     custom_instructions: str | None = Field(default=None)
     institution: str | None = Field(default=None, max_length=255)
     institution_country: str | None = Field(default=None, max_length=120)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), sa_column=_now_column())
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), sa_column=_now_column())
 
     publications: list["PublicationRecord"] = Relationship(back_populates="professor")
     outreaches: list["OutreachRecord"] = Relationship(back_populates="professor")
@@ -53,6 +64,9 @@ class PublicationRecord(UUIDBase, table=True):
     # Lifecycle: pending | indexing | indexed | needs_upload | failed
     status: str = Field(default="pending", max_length=20, index=True)
 
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), sa_column=_now_column())
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), sa_column=_now_column())
+
     professor: Optional["ProfessorRecord"] = Relationship(back_populates="publications")
     chunks: list["PublicationChunkRecord"] = Relationship(
         back_populates="publication",
@@ -67,6 +81,8 @@ class PublicationChunkRecord(UUIDBase, table=True):
     professor_id: UUID = Field(foreign_key="professors.id", index=True)
     chunk_text: str
     embedding: list[float] | None = Field(default=None, sa_column=Column(Vector(1024)))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), sa_column=_now_column())
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), sa_column=_now_column())
 
     publication: Optional["PublicationRecord"] = Relationship(back_populates="chunks")
 
@@ -82,6 +98,7 @@ class OutreachRecord(UUIDBase, table=True):
     body: str
     body_html: str | None = Field(default=None)
     attachment_keys: str = Field(default="[]")
+    provider_message_id: str | None = Field(default=None, max_length=255, index=True)
     received_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     status: str = Field(default="pending_triage", max_length=30, index=True)
     replied_at: datetime | None = Field(
@@ -96,6 +113,8 @@ class OutreachRecord(UUIDBase, table=True):
     overridden_by_professor: bool = Field(default=False)
     extracted_profile_json: str | None = Field(default=None)
     extracted_claims_json: str | None = Field(default=None)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), sa_column=_now_column())
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), sa_column=_now_column())
 
     professor: Optional["ProfessorRecord"] = Relationship(back_populates="outreaches")
 
@@ -112,3 +131,5 @@ class DebateTraceRecord(UUIDBase, table=True):
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
     turns_json: str = Field(default="[]")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), sa_column=_now_column())
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), sa_column=_now_column())

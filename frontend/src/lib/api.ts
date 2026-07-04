@@ -94,7 +94,7 @@ export interface Outreach {
   triage_verdict: 'reject' | 'promote' | null;
   debate_trace_id: string | null;
   decision: Decision | null;
-  status: 'pending_triage' | 'rejected' | 'awaiting_review' | 'replied';
+  status: 'pending_triage' | 'held' | 'rejected' | 'awaiting_review' | 'replied';
   replied_at: string | null;
 }
 

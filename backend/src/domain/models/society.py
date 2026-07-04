@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -66,3 +66,4 @@ class DebateTrace(BaseModel):
     terminated_at_round: int | None = None
     started_at: datetime
     ended_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

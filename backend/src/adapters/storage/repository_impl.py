@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlmodel import col, delete, select
@@ -72,6 +73,7 @@ def _record_to_outreach(r: OutreachRecord) -> Outreach:
         body=r.body,
         body_html=r.body_html,
         attachment_keys=_deserialize_attachments(r.attachment_keys),
+        provider_message_id=r.provider_message_id,
         received_at=r.received_at,
         status=OutreachStatus(r.status),
         replied_at=r.replied_at,
@@ -89,6 +91,7 @@ def _record_to_outreach(r: OutreachRecord) -> Outreach:
             else []
         ),
         decision=decision,
+        created_at=r.created_at,
     )
 
 
@@ -103,6 +106,7 @@ def _outreach_to_record(o: Outreach) -> OutreachRecord:
         body=o.body,
         body_html=o.body_html,
         attachment_keys=json.dumps([a.model_dump() for a in o.attachment_keys]),
+        provider_message_id=o.provider_message_id,
         received_at=o.received_at,
         status=o.status.value,
         replied_at=o.replied_at,
@@ -119,6 +123,8 @@ def _outreach_to_record(o: Outreach) -> OutreachRecord:
         extracted_claims_json=(
             json.dumps([c.model_dump() for c in o.extracted_claims]) if o.extracted_claims else None
         ),
+        created_at=o.created_at,
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -144,6 +150,7 @@ def _record_to_professor(r: ProfessorRecord, pubs: list[PublicationRecord]) -> P
         institution=r.institution,
         institution_country=r.institution_country,
         publications=[_record_to_publication(p) for p in pubs],
+        created_at=r.created_at,
     )
 
 
@@ -157,6 +164,7 @@ def _record_to_publication(p: PublicationRecord) -> Publication:
         storage_key=p.storage_key,
         indexed=p.indexed,
         status=PublicationStatus(p.status),
+        created_at=p.created_at,
     )
 
 
@@ -172,6 +180,7 @@ def _record_to_trace(r: DebateTraceRecord) -> DebateTrace:
         terminated_at_round=r.terminated_at_round,
         started_at=r.started_at,
         ended_at=r.ended_at,
+        created_at=r.created_at,
     )
 
 
@@ -184,6 +193,8 @@ def _trace_to_record(t: DebateTrace) -> DebateTraceRecord:
         terminated_at_round=t.terminated_at_round,
         started_at=t.started_at,
         ended_at=t.ended_at,
+        created_at=t.created_at,
+        updated_at=datetime.now(UTC),
         turns_json=json.dumps([turn.model_dump(mode="json") for turn in t.turns]),
     )
 
@@ -203,6 +214,35 @@ class SqlOutreachRepository(OutreachRepository):
 
     async def get_by_id(self, outreach_id: UUID) -> Outreach | None:
         record = await self._session.get(OutreachRecord, outreach_id)
+        return _record_to_outreach(record) if record else None
+
+    async def get_by_provider_message_id(self, provider_message_id: str) -> Outreach | None:
+        result = await self._session.exec(
+            select(OutreachRecord).where(
+                OutreachRecord.provider_message_id == provider_message_id
+            )
+        )
+        record = result.first()
+        return _record_to_outreach(record) if record else None
+
+    async def find_recent_duplicate(
+        self,
+        professor_id: UUID,
+        sender_email: str,
+        subject: str | None,
+        body: str,
+        since: datetime,
+    ) -> Outreach | None:
+        result = await self._session.exec(
+            select(OutreachRecord)
+            .where(OutreachRecord.professor_id == professor_id)
+            .where(OutreachRecord.sender_email == sender_email)
+            .where(OutreachRecord.subject == subject)
+            .where(OutreachRecord.body == body)
+            .where(OutreachRecord.received_at >= since)
+            .order_by(OutreachRecord.received_at.desc())
+        )
+        record = result.first()
         return _record_to_outreach(record) if record else None
 
     async def list_by_verdict(
@@ -257,6 +297,8 @@ class SqlProfessorRepository(ProfessorRepository):
             custom_instructions=professor.custom_instructions,
             institution=professor.institution,
             institution_country=professor.institution_country,
+            created_at=professor.created_at,
+            updated_at=datetime.now(UTC),
         )
         merged = await self._session.merge(record)
         await self._session.commit()
@@ -347,6 +389,8 @@ class SqlPublicationRepository(PublicationRepository):
             storage_key=publication.storage_key,
             indexed=publication.indexed,
             status=publication.status.value,
+            created_at=publication.created_at,
+            updated_at=datetime.now(UTC),
         )
         merged = await self._session.merge(record)
         await self._session.commit()

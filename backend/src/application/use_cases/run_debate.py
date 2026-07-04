@@ -11,7 +11,7 @@ from src.application.ports.outbound.repository import (
     ProfessorRepository,
 )
 from src.domain.collaboration.negotiation_engine import NegotiationEngine
-from src.domain.models.outreach import OutreachStatus, TriageVerdict
+from src.domain.models.outreach import DecisionLabel, OutreachStatus, TriageVerdict
 from src.domain.models.professor import Professor
 
 # The engine is scoped to a professor (its retriever is per-corpus), so it can't
@@ -54,18 +54,38 @@ class RunDebateUseCase:
             logger.warning("Debate: professor {} not found", outreach.professor_id)
             return None
 
+        capacity = professor.capacity
+        effective_slots = capacity.open_slots - capacity.students_committed
+        if effective_slots <= 0 and capacity.hold_when_at_capacity:
+            # No room to offer — park the candidate instead of spending a debate
+            # on a slot that doesn't exist. Released by re-triage once a slot opens.
+            outreach.status = OutreachStatus.HELD
+            await self._outreach_repo.save(outreach)
+            logger.info("Debate held for outreach {} — professor at capacity", outreach_id)
+            return None
+
         engine = self._engine_factory(professor)
         outcome = await engine.run(outreach, professor)
 
         saved_trace = await self._trace_repo.save(outcome.trace)
         outreach.debate_trace_id = saved_trace.id
         outreach.decision = outcome.decision
-        outreach.status = OutreachStatus.AWAITING_REVIEW
+        # A clear decline sends nothing outbound, so it may auto-resolve without
+        # bothering the professor (still visible + reversible). Everything that
+        # could lead to an outbound reply waits for explicit approval (Principle 5).
+        if (
+            outcome.decision.label == DecisionLabel.DECLINE
+            and capacity.auto_resolve_declines
+        ):
+            outreach.status = OutreachStatus.REJECTED
+        else:
+            outreach.status = OutreachStatus.AWAITING_REVIEW
         await self._outreach_repo.save(outreach)
         logger.info(
-            "Debate complete for outreach {}: {} ({} turns)",
+            "Debate complete for outreach {}: {} ({} turns, status={})",
             outreach_id,
             outcome.decision.label.value,
             len(outcome.trace.turns),
+            outreach.status.value,
         )
         return saved_trace.id

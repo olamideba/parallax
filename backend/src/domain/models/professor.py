@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -25,6 +26,10 @@ class Publication(BaseModel):
     storage_key: str | None = None
     indexed: bool = False
     status: PublicationStatus = PublicationStatus.PENDING
+    # True creation time — round-tripped through every read/save (see the
+    # matching comment on Outreach.created_at for why this must not default
+    # to "now" on every save).
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Capacity(BaseModel):
@@ -54,3 +59,4 @@ class Professor(BaseModel):
     # society (e.g. "only theory students, no pure-applied ML"). Injected into
     # the Gatekeeper prompt and, later, the debate agents.
     custom_instructions: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
