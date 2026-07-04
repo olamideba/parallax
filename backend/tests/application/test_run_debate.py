@@ -14,7 +14,7 @@ from src.domain.models.outreach import (
     OutreachStatus,
     TriageVerdict,
 )
-from src.domain.models.professor import Professor
+from src.domain.models.professor import Capacity, Professor
 from src.domain.models.society import DebateTrace
 
 
@@ -72,7 +72,11 @@ def _outreach(**overrides) -> Outreach:  # noqa: ANN003
     return Outreach(**base)
 
 
-def _outcome(outreach: Outreach, professor: Professor) -> DebateOutcome:
+def _outcome(
+    outreach: Outreach,
+    professor: Professor,
+    label: DecisionLabel = DecisionLabel.INVITE,
+) -> DebateOutcome:
     trace = DebateTrace(
         id=uuid4(),
         outreach_id=outreach.id,
@@ -80,12 +84,14 @@ def _outcome(outreach: Outreach, professor: Professor) -> DebateOutcome:
         round_cap=3,
         started_at=datetime.now(UTC),
     )
-    decision = Decision(label=DecisionLabel.INVITE, rationale="fit", drafted_reply="hello")
+    decision = Decision(label=label, rationale="fit", drafted_reply="hello")
     return DebateOutcome(trace=trace, decision=decision)
 
 
-def _professor(pid) -> Professor:  # noqa: ANN001
-    return Professor(id=pid, email="p@uni.edu")
+def _professor(pid, **capacity_kwargs) -> Professor:  # noqa: ANN001, ANN003
+    caps = dict(open_slots=1, students_committed=0)
+    caps.update(capacity_kwargs)
+    return Professor(id=pid, email="p@uni.edu", capacity=Capacity(**caps))
 
 
 @pytest.mark.asyncio
@@ -105,6 +111,85 @@ async def test_promoted_outreach_runs_debate_persists_trace_and_decision() -> No
     assert o_repo.saved.decision.label == DecisionLabel.INVITE
     assert o_repo.saved.debate_trace_id == outcome.trace.id
     assert engine.ran_with[1] is prof
+
+
+@pytest.mark.asyncio
+async def test_clear_decline_auto_resolves_when_flag_on() -> None:
+    outreach = _outreach()
+    prof = _professor(outreach.professor_id, auto_resolve_declines=True)
+    engine = FakeEngine(_outcome(outreach, prof, label=DecisionLabel.DECLINE))
+    o_repo, t_repo = FakeOutreachRepo(outreach), FakeTraceRepo()
+
+    uc = RunDebateUseCase(o_repo, FakeProfessorRepo(prof), t_repo, lambda p: engine)
+    await uc.execute(outreach.id)
+
+    # No outbound in a decline, so it resolves without HITL — but still persisted
+    # + reversible (rejected, not silently dropped).
+    assert o_repo.saved.status == OutreachStatus.REJECTED
+    assert o_repo.saved.decision.label == DecisionLabel.DECLINE
+
+
+@pytest.mark.asyncio
+async def test_decline_awaits_review_when_auto_resolve_off() -> None:
+    outreach = _outreach()
+    prof = _professor(outreach.professor_id, auto_resolve_declines=False)
+    engine = FakeEngine(_outcome(outreach, prof, label=DecisionLabel.DECLINE))
+    o_repo, t_repo = FakeOutreachRepo(outreach), FakeTraceRepo()
+
+    uc = RunDebateUseCase(o_repo, FakeProfessorRepo(prof), t_repo, lambda p: engine)
+    await uc.execute(outreach.id)
+
+    assert o_repo.saved.status == OutreachStatus.AWAITING_REVIEW
+
+
+@pytest.mark.asyncio
+async def test_invite_always_awaits_review_even_with_auto_resolve_on() -> None:
+    outreach = _outreach()
+    prof = _professor(outreach.professor_id, auto_resolve_declines=True)
+    engine = FakeEngine(_outcome(outreach, prof, label=DecisionLabel.INVITE))
+    o_repo, t_repo = FakeOutreachRepo(outreach), FakeTraceRepo()
+
+    uc = RunDebateUseCase(o_repo, FakeProfessorRepo(prof), t_repo, lambda p: engine)
+    await uc.execute(outreach.id)
+
+    # An invite could lead to an outbound reply — never auto-resolves.
+    assert o_repo.saved.status == OutreachStatus.AWAITING_REVIEW
+
+
+@pytest.mark.asyncio
+async def test_held_when_at_capacity_skips_debate() -> None:
+    outreach = _outreach()
+    prof = _professor(outreach.professor_id, open_slots=1, students_committed=1)  # 0 effective
+    engine = FakeEngine(_outcome(outreach, prof))
+    o_repo, t_repo = FakeOutreachRepo(outreach), FakeTraceRepo()
+
+    uc = RunDebateUseCase(o_repo, FakeProfessorRepo(prof), t_repo, lambda p: engine)
+    result = await uc.execute(outreach.id)
+
+    assert result is None
+    assert engine.ran_with is None  # debate never ran
+    assert o_repo.saved.status == OutreachStatus.HELD
+    assert t_repo.saved is None
+
+
+@pytest.mark.asyncio
+async def test_debates_at_capacity_when_hold_flag_off() -> None:
+    outreach = _outreach()
+    prof = _professor(
+        outreach.professor_id,
+        open_slots=1,
+        students_committed=1,
+        hold_when_at_capacity=False,
+    )
+    engine = FakeEngine(_outcome(outreach, prof))
+    o_repo, t_repo = FakeOutreachRepo(outreach), FakeTraceRepo()
+
+    uc = RunDebateUseCase(o_repo, FakeProfessorRepo(prof), t_repo, lambda p: engine)
+    trace_id = await uc.execute(outreach.id)
+
+    assert trace_id is not None
+    assert engine.ran_with is not None  # debate ran despite being full
+    assert o_repo.saved.status == OutreachStatus.AWAITING_REVIEW
 
 
 @pytest.mark.asyncio

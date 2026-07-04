@@ -37,7 +37,9 @@ export default function InboxPage() {
   const outreaches = React.useMemo(() => {
     if (activeTab === 'pending') {
       return allOutreaches.filter(
-        o => (o.status === 'awaiting_review' && o.decision?.label !== 'decline') || o.status === 'pending_triage'
+        o => (o.status === 'awaiting_review' && o.decision?.label !== 'decline')
+          || o.status === 'pending_triage'
+          || o.status === 'held'
       );
     } else if (activeTab === 'resolved') {
       return allOutreaches.filter(o => o.status === 'rejected');
@@ -495,6 +497,24 @@ export default function InboxPage() {
                           >
                             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3B82F6', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
                             Processing
+                          </span>
+                        ) : item.status === 'held' ? (
+                          <span
+                            title="Debate deferred — your lab is at capacity. Free a slot and re-triage to evaluate."
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              letterSpacing: '0.02em',
+                              textTransform: 'uppercase',
+                              padding: '4px 8px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'rgba(245, 158, 11, 0.08)',
+                              color: 'var(--status-triage-ink)',
+                              border: '1px solid rgba(245, 158, 11, 0.2)',
+                            }}
+                          >
+                            Held · at capacity
                           </span>
                         ) : item.status === 'replied' ? (
                           <span

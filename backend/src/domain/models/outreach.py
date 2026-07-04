@@ -12,7 +12,8 @@ SYSTEM_CONFIRMATION_CHANNEL = "system_confirmation"
 
 class OutreachStatus(StrEnum):
     PENDING_TRIAGE = "pending_triage"
-    REJECTED = "rejected"
+    HELD = "held"  # promoted, but debate deferred because the professor is at capacity
+    REJECTED = "rejected"  # auto-resolved clear decline (no HITL) — visible + reversible
     AWAITING_REVIEW = "awaiting_review"
     REPLIED = "replied"
 
