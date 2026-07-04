@@ -238,7 +238,7 @@ export default function InboxPage() {
             {(['pending', 'resolved', 'declined', 'replied'] as const).map((tab) => {
               const label =
                 tab === 'pending' ? 'Pending review' :
-                tab === 'resolved' ? 'Auto-resolved' :
+                tab === 'resolved' ? 'Archived' :
                 tab === 'declined' ? 'Declined' : 'Replied';
               const isActive = activeTab === tab;
               return (

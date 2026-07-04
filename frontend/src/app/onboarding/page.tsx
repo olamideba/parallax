@@ -145,7 +145,7 @@ export default function OnboardingPage() {
   const [fundingAmount, setFundingAmount] = useState('');
   const [fundingSource, setFundingSource] = useState('');
   const [areas, setAreas] = useState(['Sparse attention', 'Long-context retrieval', 'Efficient transformers']);
-  const [autoDecline, setAutoDecline] = useState(true);
+  const [archiveDeclines, setArchiveDeclines] = useState(true);
   const [holdAtCapacity, setHoldAtCapacity] = useState(true);
   const [customInstructions, setCustomInstructions] = useState('');
   const [institution, setInstitution] = useState('');
@@ -206,7 +206,7 @@ export default function OnboardingPage() {
         if (prof.recruiting_topics && prof.recruiting_topics.length > 0) {
           setAreas(prof.recruiting_topics);
         }
-        setAutoDecline(prof.auto_resolve_declines ?? true);
+        setArchiveDeclines(prof.auto_resolve_declines ?? true);
         setHoldAtCapacity(prof.hold_when_at_capacity ?? true);
         setCustomInstructions(prof.custom_instructions || '');
         setInstitution(prof.institution || '');
@@ -359,7 +359,7 @@ export default function OnboardingPage() {
         budget_amount: budgetAmountInt,
         funding_source: fundingSource || null,
         recruiting_topics: areas,
-        auto_resolve_declines: autoDecline,
+        auto_resolve_declines: archiveDeclines,
         hold_when_at_capacity: holdAtCapacity,
         custom_instructions: customInstructions.trim() || null,
         institution: institution.trim() || null,
@@ -867,10 +867,10 @@ export default function OnboardingPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {monoHeader('Triage preferences')}
           <Checkbox
-            label="Auto-resolve clear declines"
-            description="When no claims verify and there is no research overlap, decline without asking you."
-            checked={autoDecline}
-            onChange={e => setAutoDecline(e.target.checked)}
+            label="Archive declines"
+            description="When no claims verify and there is no research overlap, decline and archive it without asking you."
+            checked={archiveDeclines}
+            onChange={e => setArchiveDeclines(e.target.checked)}
           />
           <Checkbox
             label="Hold candidates when at capacity"
