@@ -38,6 +38,12 @@ class Capacity(BaseModel):
     budget_amount: int | None = None
     funding_source: str | None = None
     recruiting_topics: list[str] = Field(default_factory=list)
+    # Frontend/product-facing name is "Archive declines" — kept as
+    # auto_resolve_declines here since it's the wire field name (API body,
+    # DB column) and renaming it would require a migration + API bump for a
+    # cosmetic label change. Semantics: a clear decline sends nothing
+    # outbound, so it can resolve into the archived/reviewable queue without
+    # waiting on professor approval.
     auto_resolve_declines: bool = True
     hold_when_at_capacity: bool = True
 

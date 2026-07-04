@@ -423,46 +423,6 @@ export default function OutreachDetailPage() {
 
           {/* RIGHT COLUMN: AI Debate & Action Center */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            
-            {/* Debate Claim Extraction Panel */}
-            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <Sparkles size={16} style={{ color: 'var(--navy-900)' }} />
-                <h3 style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Extracted Fact Verification</h3>
-              </div>
-
-              {claims && claims.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {claims.map((claim, idx) => {
-                    const statusIcon = claim.verified === true ? <Check size={12} /> : claim.verified === false ? <X size={12} /> : <span style={{ fontWeight: 600 }}>—</span>;
-                    const statusColor = claim.verified === true ? 'var(--status-verified-ink)' : claim.verified === false ? 'var(--status-critical-ink)' : 'var(--text-muted)';
-                    const statusBg = claim.verified === true ? 'rgba(16, 185, 129, 0.08)' : claim.verified === false ? 'rgba(239, 68, 68, 0.08)' : 'rgba(0, 0, 0, 0.04)';
-                    
-                    return (
-                      <div key={idx} style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: '12px' }}>
-                          <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: '1.4' }}>
-                            &ldquo;{claim.text}&rdquo;
-                          </p>
-                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: statusBg, color: statusColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${statusColor.replace(')', ', 0.15)')}` }}>
-                            {statusIcon}
-                          </div>
-                        </div>
-                        {claim.receipt && (
-                          <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px', fontSize: '11px', fontFamily: 'var(--font-sans)', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                            <strong>Verification note:</strong> {claim.receipt}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '24px 0', border: '1px dashed var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}>
-                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>No verification claims found.</span>
-                </div>
-              )}
-            </div>
 
             {/* Decision Consensus & Actions */}
             <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: isMobile ? '20px' : '28px', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -670,6 +630,46 @@ export default function OutreachDetailPage() {
                     </Button>
                   </div>
                 </form>
+              )}
+            </div>
+
+            {/* Debate Claim Extraction Panel */}
+            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <Sparkles size={16} style={{ color: 'var(--navy-900)' }} />
+                <h3 style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Extracted Fact Verification</h3>
+              </div>
+
+              {claims && claims.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {claims.map((claim, idx) => {
+                    const statusIcon = claim.verified === true ? <Check size={12} /> : claim.verified === false ? <X size={12} /> : <span style={{ fontWeight: 600 }}>—</span>;
+                    const statusColor = claim.verified === true ? 'var(--status-verified-ink)' : claim.verified === false ? 'var(--status-critical-ink)' : 'var(--text-muted)';
+                    const statusBg = claim.verified === true ? 'rgba(16, 185, 129, 0.08)' : claim.verified === false ? 'rgba(239, 68, 68, 0.08)' : 'rgba(0, 0, 0, 0.04)';
+
+                    return (
+                      <div key={idx} style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: '12px' }}>
+                          <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: '1.4' }}>
+                            &ldquo;{claim.text}&rdquo;
+                          </p>
+                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: statusBg, color: statusColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${statusColor.replace(')', ', 0.15)')}` }}>
+                            {statusIcon}
+                          </div>
+                        </div>
+                        {claim.receipt && (
+                          <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: '6px', fontSize: '11px', fontFamily: 'var(--font-sans)', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                            <strong>Verification note:</strong> {claim.receipt}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '24px 0', border: '1px dashed var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}>
+                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>No verification claims found.</span>
+                </div>
               )}
             </div>
           </div>
