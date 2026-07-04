@@ -12,7 +12,72 @@ import { Button } from '@/components/Button';
 import { Tag } from '@/components/Tag';
 import { Loader } from '@/components/Loader';
 import { useIsMobile } from '@/lib/useMediaQuery';
-import { Inbox, LogOut, Users, BookOpen, Settings, ChevronRight, AlertCircle } from 'lucide-react';
+import { Inbox, LogOut, Users, BookOpen, Settings, ChevronRight, AlertCircle, Check } from 'lucide-react';
+
+// Lab-capacity stat rows: quiet Cabinet label, bold right-aligned numeral.
+const statLabel: React.CSSProperties = {
+  fontFamily: 'var(--font-display)',
+  fontWeight: 400,
+  fontSize: '10px',
+  letterSpacing: '0.06em',
+  color: 'var(--text-muted)',
+};
+const statValue: React.CSSProperties = {
+  fontFamily: 'var(--font-display)',
+  fontWeight: 700,
+  fontSize: 'var(--text-md)',
+  color: 'var(--text-strong)',
+  justifySelf: 'end',
+  lineHeight: 1,
+};
+
+/* Row status treatment. Verdicts read as quiet pills next to the name;
+   "request more info" is deliberately the quietest — plain tinted text. */
+function QueueStatusPill({ item }: { item: Outreach }) {
+  const base: React.CSSProperties = {
+    fontFamily: 'var(--font-display)',
+    fontSize: '9.5px',
+    fontWeight: 500,
+    letterSpacing: '0.03em',
+    textTransform: 'uppercase',
+    padding: '2px 8px',
+    borderRadius: '999px',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  };
+
+  if (item.status === 'pending_triage') {
+    return (
+      <span style={{ ...base, background: 'var(--periwinkle-100)', color: 'var(--periwinkle-700)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--periwinkle-600)', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
+        Processing
+      </span>
+    );
+  }
+  if (item.status === 'held') {
+    return (
+      <span
+        title="Debate deferred — your lab is at capacity. Free a slot and re-triage to evaluate."
+        style={{ ...base, background: 'var(--status-pending-bg)', color: 'var(--status-pending-ink)' }}
+      >
+        Held
+      </span>
+    );
+  }
+  if (item.status === 'replied') {
+    return <span style={{ ...base, background: 'var(--status-verified-bg)', color: 'var(--status-verified-ink)' }}>Replied</span>;
+  }
+  if (item.decision?.label === 'invite') {
+    return <span style={{ ...base, background: 'var(--status-verified-bg)', color: 'var(--status-verified-ink)' }}>Invite</span>;
+  }
+  if (item.decision?.label === 'decline') {
+    return <span style={{ ...base, background: 'var(--status-refuted-bg)', color: 'var(--status-refuted-ink)' }}>Decline</span>;
+  }
+  if (item.decision?.label === 'request_more_info') {
+    return <span style={{ ...base, padding: 0, borderRadius: 0, color: 'var(--status-pending-ink)' }}>More info</span>;
+  }
+  return null;
+}
 
 export default function InboxPage() {
   const router = useRouter();
@@ -33,6 +98,16 @@ export default function InboxPage() {
   const [loadingQueue, setLoadingQueue] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+
+  const toggleRow = (id: string) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const outreaches = React.useMemo(() => {
     if (activeTab === 'pending') {
@@ -153,7 +228,7 @@ export default function InboxPage() {
           <span style={{ flex: 1 }} />
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 500 }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 400, letterSpacing: 'var(--tracking-snug)' }}>
               {displayName}
             </span>
             <button
@@ -198,9 +273,9 @@ export default function InboxPage() {
           <div>
             <span
               style={{
-                fontFamily: 'var(--font-mono)',
+                fontFamily: 'var(--font-display)',
                 fontSize: '10px',
-                fontWeight: 600,
+                fontWeight: 400,
                 color: 'var(--text-muted)',
                 letterSpacing: 'var(--tracking-caps)',
                 textTransform: 'uppercase',
@@ -215,7 +290,7 @@ export default function InboxPage() {
                 margin: 0,
                 fontFamily: 'var(--font-display)',
                 fontSize: 'var(--text-display-md)',
-                fontWeight: 600,
+                fontWeight: 700,
                 color: 'var(--text-strong)',
                 letterSpacing: '-0.01em',
               }}
@@ -224,7 +299,7 @@ export default function InboxPage() {
             </h1>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs — the active tab carries the only accent; inactive tabs sit dim */}
           <div
             style={{
               display: 'flex',
@@ -246,11 +321,12 @@ export default function InboxPage() {
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   style={{
-                    fontFamily: 'var(--font-sans)',
+                    fontFamily: 'var(--font-display)',
                     fontSize: 'var(--text-sm)',
-                    fontWeight: isActive ? 600 : 500,
-                    color: isActive ? 'var(--text-strong)' : 'var(--text-muted)',
-                    borderBottom: isActive ? '2px solid var(--navy-900)' : 'none',
+                    fontWeight: isActive ? 700 : 400,
+                    letterSpacing: 'var(--tracking-snug)',
+                    color: isActive ? 'var(--text-strong)' : 'var(--text-subtle)',
+                    borderBottom: isActive ? '2px solid var(--navy-900)' : '2px solid transparent',
                     paddingBottom: '10px',
                     cursor: 'pointer',
                     transition: 'color var(--duration-fast)',
@@ -357,203 +433,150 @@ export default function InboxPage() {
               </p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {outreaches.map((item) => {
-                const decisionLabel = item.decision?.label;
-                const statusColor =
-                  decisionLabel === 'invite'
-                    ? 'var(--status-verified-ink)'
-                    : decisionLabel === 'request_more_info'
-                    ? 'var(--status-triage-ink)'
-                    : 'var(--status-critical-ink)';
-                
-                const statusBg =
-                  decisionLabel === 'invite'
-                    ? 'rgba(16, 185, 129, 0.08)'
-                    : decisionLabel === 'request_more_info'
-                    ? 'rgba(245, 158, 11, 0.08)'
-                    : 'rgba(239, 68, 68, 0.08)';
+            /* Merged dense list — hairline-divided rows, three aligned zones */
+            <div
+              style={{
+                background: 'var(--surface-card)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-lg)',
+                overflow: 'hidden',
+              }}
+            >
+              {outreaches.map((item, rowIdx) => {
+                const name = item.extracted_profile?.name || item.sender_name || 'Anonymous Applicant';
+                const interests = item.extracted_profile?.interests ?? [];
+                const shownTags = interests.slice(0, 2);
+                const overflowTags = interests.length - shownTags.length;
+                const received = new Date(item.received_at);
+                const dateLabel = received.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                const checked = selectedRows.has(item.id);
 
                 return (
                   <Link
                     href={`/inbox/${item.id}`}
                     key={item.id}
-                    style={{ textDecoration: 'none' }}
+                    className="qrow"
+                    style={{
+                      display: 'flex',
+                      flexDirection: isMobile ? 'column' : 'row',
+                      alignItems: isMobile ? 'stretch' : 'center',
+                      gap: isMobile ? '4px' : '16px',
+                      padding: isMobile ? '10px 14px' : '9px 16px',
+                      textDecoration: 'none',
+                      borderTop: rowIdx === 0 ? 'none' : '1px solid var(--border-subtle)',
+                      cursor: 'pointer',
+                    }}
                   >
-                    <div
+                    {/* Zone 1 — identifier: checkbox, name, verdict pill */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: isMobile ? 'auto' : '260px', flexShrink: 0, minWidth: 0 }}>
+                      {!isMobile && (
+                        <span
+                          role="checkbox"
+                          aria-checked={checked}
+                          aria-label={`Select ${name}`}
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleRow(item.id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === ' ' || e.key === 'Enter') {
+                              e.preventDefault();
+                              toggleRow(item.id);
+                            }
+                          }}
+                          style={{
+                            width: '15px',
+                            height: '15px',
+                            borderRadius: '4px',
+                            border: checked ? '1px solid var(--navy-900)' : '1px solid var(--border-default)',
+                            background: checked ? 'var(--navy-900)' : 'var(--surface-card)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            color: '#fff',
+                          }}
+                        >
+                          {checked && <Check size={11} strokeWidth={3} />}
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: 'var(--text-sm)',
+                          fontWeight: 700,
+                          letterSpacing: '-0.01em',
+                          color: 'var(--text-strong)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          minWidth: 0,
+                        }}
+                      >
+                        {name}
+                      </span>
+                      <QueueStatusPill item={item} />
+                      {isMobile && (
+                        <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0 }}>
+                          {dateLabel}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Zone 2 — content: subject + opening snippet, one line */}
+                    <span
                       style={{
-                        background: 'var(--surface-card)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-xl)',
-                        padding: isMobile ? '16px' : '20px 24px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: isMobile ? '12px' : '24px',
-                        transition: 'transform var(--duration-fast), box-shadow var(--duration-fast)',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-1px)';
-                        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'none';
-                        e.currentTarget.style.boxShadow = 'none';
+                        flex: 1,
+                        minWidth: 0,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        fontFamily: 'var(--font-sans)',
+                        fontSize: 'var(--text-xs)',
+                        lineHeight: 1.5,
                       }}
                     >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                      <span style={{ color: 'var(--text-body)', fontWeight: 500 }}>{item.subject || '(no subject)'}</span>
+                      <span style={{ color: 'var(--text-muted)' }}> — {item.body.replace(/\s+/g, ' ')}</span>
+                    </span>
+
+                    {/* Zone 3 — metadata: capped tags, date, hover action */}
+                    {!isMobile && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', flexShrink: 0 }}>
+                        {shownTags.map((interest, idx) => (
                           <span
+                            key={idx}
                             style={{
-                              fontFamily: 'var(--font-sans)',
-                              fontSize: 'var(--text-md)',
-                              fontWeight: 600,
-                              color: 'var(--text-strong)',
+                              fontFamily: 'var(--font-display)',
+                              fontSize: '10px',
+                              fontWeight: 400,
+                              background: 'var(--gray-50)',
+                              border: '1px solid var(--border-subtle)',
+                              color: 'var(--text-body)',
+                              padding: '1px 7px',
+                              borderRadius: '999px',
+                              whiteSpace: 'nowrap',
+                              maxWidth: '110px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
                             }}
                           >
-                            {item.extracted_profile?.name || item.sender_name || 'Anonymous Applicant'}
+                            {interest}
                           </span>
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: 'var(--text-xs)',
-                              color: 'var(--text-muted)',
-                              wordBreak: 'break-all',
-                            }}
-                          >
-                            {item.sender_email}
+                        ))}
+                        {overflowTags > 0 && (
+                          <span style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            +{overflowTags}
                           </span>
-                        </div>
-                        
-                        <span
-                          style={{
-                            fontFamily: 'var(--font-sans)',
-                            fontSize: 'var(--text-sm)',
-                            fontWeight: 500,
-                            color: 'var(--text-body)',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {item.subject || '(no subject)'}
+                        )}
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', minWidth: '46px', textAlign: 'right' }}>
+                          {dateLabel}
                         </span>
-
-                        <p
-                          style={{
-                            margin: 0,
-                            fontFamily: 'var(--font-sans)',
-                            fontSize: 'var(--text-sm)',
-                            color: 'var(--text-muted)',
-                            lineHeight: '1.4',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {item.body}
-                        </p>
-
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-                          {item.extracted_profile?.interests.map((interest, idx) => (
-                            <span
-                              key={idx}
-                              style={{
-                                fontFamily: 'var(--font-sans)',
-                                fontSize: '10px',
-                                background: 'var(--gray-50)',
-                                border: '1px solid var(--border-subtle)',
-                                color: 'var(--text-body)',
-                                padding: '1px 6px',
-                                borderRadius: 'var(--radius-sm)',
-                              }}
-                            >
-                              {interest}
-                            </span>
-                          ))}
-                        </div>
+                        <ChevronRight size={15} className="qrow-action" style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                       </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
-                        {item.status === 'pending_triage' ? (
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '10px',
-                              fontWeight: 600,
-                              letterSpacing: '0.02em',
-                              textTransform: 'uppercase',
-                              padding: '4px 8px',
-                              borderRadius: 'var(--radius-sm)',
-                              background: 'rgba(59, 130, 246, 0.08)',
-                              color: '#3B82F6',
-                              border: '1px solid rgba(59, 130, 246, 0.2)',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                            }}
-                          >
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3B82F6', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
-                            Processing
-                          </span>
-                        ) : item.status === 'held' ? (
-                          <span
-                            title="Debate deferred — your lab is at capacity. Free a slot and re-triage to evaluate."
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '10px',
-                              fontWeight: 600,
-                              letterSpacing: '0.02em',
-                              textTransform: 'uppercase',
-                              padding: '4px 8px',
-                              borderRadius: 'var(--radius-sm)',
-                              background: 'rgba(245, 158, 11, 0.08)',
-                              color: 'var(--status-triage-ink)',
-                              border: '1px solid rgba(245, 158, 11, 0.2)',
-                            }}
-                          >
-                            Held · at capacity
-                          </span>
-                        ) : item.status === 'replied' ? (
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '10px',
-                              fontWeight: 600,
-                              letterSpacing: '0.02em',
-                              textTransform: 'uppercase',
-                              padding: '4px 8px',
-                              borderRadius: 'var(--radius-sm)',
-                              background: 'rgba(16, 185, 129, 0.08)',
-                              color: 'var(--status-verified-ink)',
-                              border: '1px solid rgba(16, 185, 129, 0.2)',
-                            }}
-                          >
-                            Replied
-                          </span>
-                        ) : item.decision ? (
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '10px',
-                              fontWeight: 600,
-                              letterSpacing: '0.02em',
-                              textTransform: 'uppercase',
-                              padding: '4px 8px',
-                              borderRadius: 'var(--radius-sm)',
-                              background: statusBg,
-                              color: statusColor,
-                              border: `1px solid ${statusColor.replace(')', ', 0.12)')}`,
-                            }}
-                          >
-                            {item.decision.label.replace(/_/g, ' ')}
-                          </span>
-                        ) : null}
-                        <ChevronRight size={18} style={{ color: 'var(--text-muted)' }} />
-                      </div>
-                    </div>
+                    )}
                   </Link>
                 );
               })}
@@ -579,54 +602,59 @@ export default function InboxPage() {
               <div style={{ color: 'var(--navy-900)' }}>
                 <Users size={18} />
               </div>
-              <h3 style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
                 Lab capacity
               </h3>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>
-                <span style={{ color: 'var(--text-muted)' }}>OPEN SLOTS:</span>
-                <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>{slots}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>
-                <span style={{ color: 'var(--text-muted)' }}>COMMITTED:</span>
-                <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>{committed}</span>
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 'var(--text-xs)',
-                  fontFamily: 'var(--font-mono)',
-                  borderTop: '1px solid var(--border-subtle)',
-                  paddingTop: '8px',
-                  marginTop: '2px',
-                }}
-              >
-                <span style={{ color: 'var(--text-muted)' }}>EFFECTIVE VACANT:</span>
-                <span style={{ color: 'var(--status-verified-ink)', fontWeight: 600 }}>{effectiveSlots}</span>
-              </div>
+            {/* Stat rows on one shared grid: label column + right-aligned value
+                column. While loading, values are shimmer blocks — never "0". */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr max-content', columnGap: '10px', rowGap: '8px', alignItems: 'baseline' }}>
+              <span style={statLabel}>OPEN SLOTS</span>
+              {loadingProfile ? <span className="skeleton" style={{ width: 24, height: 15, justifySelf: 'end' }} /> : <span style={statValue}>{slots}</span>}
+              <span style={statLabel}>COMMITTED</span>
+              {loadingProfile ? <span className="skeleton" style={{ width: 24, height: 15, justifySelf: 'end' }} /> : <span style={statValue}>{committed}</span>}
+              <span style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border-subtle)', marginTop: '2px' }} />
+              <span style={statLabel}>EFFECTIVE VACANT</span>
+              {loadingProfile ? (
+                <span className="skeleton" style={{ width: 24, height: 15, justifySelf: 'end' }} />
+              ) : (
+                <span style={{ ...statValue, color: 'var(--status-verified-ink)' }}>{effectiveSlots}</span>
+              )}
+            </div>
 
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                  borderTop: '1px solid var(--border-subtle)',
-                  paddingTop: '8px',
-                  marginTop: '2px',
-                }}
-              >
-                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>INTAKE ADDRESS:</span>
-                {profile?.intake_email ? (
-                  <span style={{ color: 'var(--text-strong)', fontSize: '11px', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
-                    {profile.intake_email}
-                  </span>
-                ) : (
-                  <Loader width={72} label="Generating address..." style={{ alignItems: 'flex-start', gap: '6px' }} />
-                )}
-              </div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                borderTop: '1px solid var(--border-subtle)',
+                paddingTop: '10px',
+              }}
+            >
+              <span style={statLabel}>INTAKE ADDRESS</span>
+              {profile?.intake_email ? (
+                <span
+                  title={profile.intake_email}
+                  style={{
+                    color: 'var(--text-strong)',
+                    fontSize: '11px',
+                    fontFamily: 'var(--font-mono)',
+                    background: 'var(--gray-50)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '4px 8px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: 'block',
+                  }}
+                >
+                  {profile.intake_email}
+                </span>
+              ) : (
+                <Loader width={72} label="Generating address..." style={{ alignItems: 'flex-start', gap: '6px' }} />
+              )}
             </div>
 
             <hr style={{ border: 'none', borderTop: '1px solid var(--border-subtle)', margin: 0 }} />
@@ -636,32 +664,40 @@ export default function InboxPage() {
                 <div style={{ color: 'var(--navy-900)' }}>
                   <BookOpen size={18} />
                 </div>
-                <h3 style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
                   Recruiting topics
                 </h3>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {areas.map((area, idx) => (
-                  <Tag key={idx} tone="accent" style={{ fontSize: '11px', padding: '2px 6px' }}>
-                    {area}
-                  </Tag>
-                ))}
+                {loadingProfile ? (
+                  <>
+                    <span className="skeleton" style={{ width: 72, height: 20, borderRadius: 6 }} />
+                    <span className="skeleton" style={{ width: 96, height: 20, borderRadius: 6 }} />
+                    <span className="skeleton" style={{ width: 60, height: 20, borderRadius: 6 }} />
+                  </>
+                ) : (
+                  areas.map((area, idx) => (
+                    <Tag key={idx} tone="accent" style={{ fontSize: '11px', padding: '2px 6px' }}>
+                      {area}
+                    </Tag>
+                  ))
+                )}
               </div>
             </div>
 
-            {funding && (
-              <>
-                <hr style={{ border: 'none', borderTop: '1px solid var(--border-subtle)', margin: 0 }} />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-                    BUDGET CONTEXT
-                  </span>
-                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 600 }}>
-                    {funding}
-                  </span>
-                </div>
-              </>
-            )}
+            {/* Budget row is always present so the sidebar keeps the same
+                structure in loading and populated states — no layout shift. */}
+            <hr style={{ border: 'none', borderTop: '1px solid var(--border-subtle)', margin: 0 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={statLabel}>BUDGET CONTEXT</span>
+              {loadingProfile ? (
+                <span className="skeleton" style={{ width: 132, height: 16 }} />
+              ) : (
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)', color: funding ? 'var(--text-strong)' : 'var(--text-subtle)', fontWeight: 700 }}>
+                  {funding || 'Not specified'}
+                </span>
+              )}
+            </div>
 
             <hr style={{ border: 'none', borderTop: '1px solid var(--border-subtle)', margin: 0 }} />
 

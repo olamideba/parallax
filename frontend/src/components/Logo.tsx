@@ -103,9 +103,9 @@ export function Wordmark({
     <div
       className={`wm ${className}`}
       style={{
-        fontFamily: "var(--font-sans)",
-        fontWeight: 500,
-        letterSpacing: "0.16em",
+        fontFamily: "var(--font-brand)",
+        fontWeight: 700,
+        letterSpacing: "0.12em",
         textTransform: "uppercase",
         color: colors[variant],
         fontSize: size,

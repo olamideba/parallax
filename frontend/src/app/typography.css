@@ -1,15 +1,50 @@
-/* Fonts loaded via globals.css @import */
-
 /* ============================================================
    PARALLAX — TYPOGRAPHY TOKENS
-   Spectral (serif display) · IBM Plex Sans (UI) · IBM Plex Mono (data)
-   A measured, journal-like scale. Restrained weights.
+   Three tiers:
+     Tier 1  Panchang Bold      (--font-brand)   wordmark + verdicts only
+     Tier 2  Cabinet Grotesk    (--font-display) titles, names, stats, labels
+     Tier 3  System sans        (--font-sans)    dense reading text
+   IBM Plex Mono stays the data face (addresses, timestamps, receipts).
    ============================================================ */
+
+@font-face {
+  font-family: 'Panchang';
+  src: url('/fonts/Panchang-Bold.woff2') format('woff2'),
+       url('/fonts/Panchang-Bold.woff') format('woff');
+  font-weight: 700;
+  font-display: swap;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Cabinet Grotesk';
+  src: url('/fonts/CabinetGrotesk-Regular.woff2') format('woff2'),
+       url('/fonts/CabinetGrotesk-Regular.woff') format('woff');
+  font-weight: 400;
+  font-display: swap;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Cabinet Grotesk';
+  src: url('/fonts/CabinetGrotesk-Medium.woff2') format('woff2'),
+       url('/fonts/CabinetGrotesk-Medium.woff') format('woff');
+  font-weight: 500;
+  font-display: swap;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Cabinet Grotesk';
+  src: url('/fonts/CabinetGrotesk-Bold.woff2') format('woff2'),
+       url('/fonts/CabinetGrotesk-Bold.woff') format('woff');
+  font-weight: 700;
+  font-display: swap;
+  font-style: normal;
+}
 
 :root {
   /* Families */
-  --font-display: 'Spectral', Georgia, 'Times New Roman', serif;
-  --font-sans:    'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-brand:   'Panchang', 'Cabinet Grotesk', system-ui, sans-serif;
+  --font-display: 'Cabinet Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans:    'Inter', 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* Weights */
@@ -20,7 +55,7 @@
   --weight-bold:     700;
 
   /* ----- Type scale (1.200 minor-third, tuned) -----
-     Display steps use the serif; text/label steps use the sans. */
+     Display steps use Cabinet Grotesk; text steps use the system sans. */
   --text-display-2xl: 4.000rem; /* 64px — hero / cover */
   --text-display-xl:  3.000rem; /* 48px */
   --text-display-lg:  2.250rem; /* 36px */
@@ -49,26 +84,26 @@
 
   /* ----- Semantic roles ----- */
   --role-display-font:   var(--font-display);
-  --role-display-weight: var(--weight-semibold);
+  --role-display-weight: var(--weight-bold);
   --role-display-leading:var(--leading-tight);
 
   --role-heading-font:   var(--font-display);
-  --role-heading-weight: var(--weight-medium);
+  --role-heading-weight: var(--weight-bold);
 
   --role-body-font:      var(--font-sans);
   --role-body-weight:    var(--weight-regular);
   --role-body-leading:   var(--leading-relaxed);
 
-  --role-ui-font:        var(--font-sans);
-  --role-ui-weight:      var(--weight-medium);
+  --role-ui-font:        var(--font-display);
+  --role-ui-weight:      var(--weight-regular);
 
-  --role-label-font:     var(--font-sans);
-  --role-eyebrow-font:   var(--font-mono);
+  --role-label-font:     var(--font-display);
+  --role-eyebrow-font:   var(--font-display);
 
   --role-data-font:      var(--font-mono);
 }
 
-/* Scale the serif display steps down on small screens so big headings don't
+/* Scale the display steps down on small screens so big headings don't
    overflow or dominate narrow viewports. Everything references these tokens,
    so shrinking them here cascades through inline styles too. */
 @media (max-width: 640px) {

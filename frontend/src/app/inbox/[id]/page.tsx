@@ -14,6 +14,44 @@ import { Loader } from '@/components/Loader';
 import { useIsMobile } from '@/lib/useMediaQuery';
 import { ArrowLeft, Check, X, AlertCircle, FileText, Send, Sparkles, AlertTriangle, RefreshCw, Play } from 'lucide-react';
 
+// Verdict display treatment — soft-tinted panel, solid accent, Panchang word.
+const VERDICT_META: Record<Decision['label'], { word: string; ink: string; bg: string; accent: string }> = {
+  invite: { word: 'Invite', ink: 'var(--status-verified-ink)', bg: 'var(--status-verified-bg)', accent: 'var(--status-verified)' },
+  request_more_info: { word: 'More info', ink: 'var(--status-pending-ink)', bg: 'var(--status-pending-bg)', accent: 'var(--status-pending)' },
+  decline: { word: 'Decline', ink: 'var(--status-refuted-ink)', bg: 'var(--status-refuted-bg)', accent: 'var(--status-refuted)' },
+};
+
+// Split the single rationale paragraph into scannable sections by sentence
+// content. Buckets that catch nothing are dropped; short rationales fall back
+// to one "Summary" section.
+function chunkRationale(rationale: string): { heading: string; sentences: string[] }[] {
+  const sentences = (rationale.match(/[^.!?]+[.!?]+["')\]]*|\S[^.!?]*$/g) ?? [rationale])
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const hard: string[] = [];
+  const auditor: string[] = [];
+  const discrepancies: string[] = [];
+  for (const s of sentences) {
+    if (/discrepan|inconsist|contradict|conflict|mismatch|overstat|inflat|exaggerat|does not match|doesn't match/i.test(s)) {
+      discrepancies.push(s);
+    } else if (/auditor|verif|unverif|authentic|receipt|citation|fabricat|cite|publication|claim/i.test(s)) {
+      auditor.push(s);
+    } else {
+      hard.push(s);
+    }
+  }
+
+  const sections = [
+    { heading: 'Hard Requirements', sentences: hard },
+    { heading: 'Auditor Insights', sentences: auditor },
+    { heading: 'Discrepancies', sentences: discrepancies },
+  ].filter((sec) => sec.sentences.length > 0);
+
+  // A one-bucket result means the split found no structure — keep it simple.
+  return sections.length > 1 ? sections : [{ heading: 'Summary', sentences }];
+}
+
 export default function OutreachDetailPage() {
   const router = useRouter();
   const isMobile = useIsMobile();
@@ -210,7 +248,7 @@ export default function OutreachDetailPage() {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunken)', padding: '24px' }}>
         <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '32px', maxWidth: '480px', width: '100%', textAlign: 'center', boxShadow: 'var(--shadow-md)' }}>
-          <AlertCircle size={40} style={{ color: 'var(--status-critical-ink)', marginBottom: '16px' }} />
+          <AlertCircle size={40} style={{ color: 'var(--status-refuted-ink)', marginBottom: '16px' }} />
           <h2 style={{ margin: '0 0 8px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--text-strong)' }}>Failed to load candidate</h2>
           <p style={{ margin: '0 0 24px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: '1.5' }}>{error}</p>
           <Button variant="primary" onClick={() => loadOutreach()}>Retry connection</Button>
@@ -247,7 +285,7 @@ export default function OutreachDetailPage() {
           <span style={{ flex: 1 }} />
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 500 }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 400, letterSpacing: 'var(--tracking-snug)' }}>
               {displayName}
             </span>
             <button
@@ -298,51 +336,48 @@ export default function OutreachDetailPage() {
           )}
 
           {error && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 'var(--radius-md)', padding: '12px 16px', color: 'var(--status-critical-ink)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 'var(--radius-md)', padding: '12px 16px', color: 'var(--status-refuted-ink)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
               <AlertCircle size={18} />
               <span>{error}</span>
             </div>
           )}
         </div>
 
-        {/* Content split grid */}
+        {/* Content split grid: left = the static "source file" (candidate facts
+            + email), right = the decision console (verdict + reasoning). */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: isMobile ? '20px' : '32px', alignItems: 'start' }}>
-          
-          {/* LEFT COLUMN: Candidate Profile and Original Outreach */}
+
+          {/* LEFT PANE: source file — one continuous scroll, no internal card seams */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            
-            {/* Candidate Identity Profile Card */}
             <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: isMobile ? '20px' : '28px', boxShadow: 'var(--shadow-sm)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-                <div>
-                  <h1 style={{ margin: '0 0 4px', fontFamily: 'var(--font-display)', fontSize: 'var(--text-xl)', fontWeight: 600, color: 'var(--text-strong)' }}>
-                    {profile?.name || outreach.sender_name || 'Anonymous Applicant'}
-                  </h1>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
-                    {profile?.email || outreach.sender_email}
-                  </span>
-                </div>
-                {profile?.country && (
-                  <Tag tone="default" style={{ fontSize: 'var(--text-xs)' }}>{profile.country}</Tag>
-                )}
+              <div style={{ marginBottom: '14px' }}>
+                <h1 style={{ margin: '0 0 4px', fontFamily: 'var(--font-display)', fontSize: 'var(--text-display-sm)', fontWeight: 700, color: 'var(--text-strong)', letterSpacing: '-0.01em' }}>
+                  {profile?.name || outreach.sender_name || 'Anonymous Applicant'}
+                </h1>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+                  {profile?.email || outreach.sender_email}
+                </span>
               </div>
 
-              {/* Badges/Credentials */}
-              {profile?.credentials && profile.credentials.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
-                  {profile.credentials.map((cred, idx) => (
-                    <span key={idx} style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', background: 'var(--navy-50)', border: '1px solid rgba(26, 54, 93, 0.1)', color: 'var(--navy-900)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', fontWeight: 500 }}>
+              {/* Credentials cluster — degrees + country on one unified row */}
+              {((profile?.credentials && profile.credentials.length > 0) || profile?.country) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+                  {profile?.credentials?.map((cred, idx) => (
+                    <span key={idx} style={{ fontFamily: 'var(--font-display)', fontSize: '11px', background: 'var(--periwinkle-50)', border: '1px solid rgba(26, 54, 93, 0.1)', color: 'var(--navy-900)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', fontWeight: 500 }}>
                       {cred}
                     </span>
                   ))}
+                  {profile?.country && (
+                    <Tag tone="default" style={{ fontSize: '11px', padding: '2px 8px' }}>{profile.country}</Tag>
+                  )}
                 </div>
               )}
 
               {/* Bio details list */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '18px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {profile?.interests && profile.interests.length > 0 && (
                   <div>
-                    <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '6px' }}>RECRUITING AREAS OF INTEREST</span>
+                    <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em', marginBottom: '6px' }}>RECRUITING AREAS OF INTEREST</span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {profile.interests.map((interest, idx) => (
                         <Tag key={idx} tone="accent" style={{ fontSize: '11px', padding: '2px 6px' }}>
@@ -355,19 +390,17 @@ export default function OutreachDetailPage() {
 
                 {profile?.funding_context && (
                   <div>
-                    <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '2px' }}>FUNDING CONTEXT</span>
+                    <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em', marginBottom: '2px' }}>FUNDING CONTEXT</span>
                     <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>{profile.funding_context}</p>
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Original Outreach Email Block */}
-            <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: isMobile ? '20px' : '28px', boxShadow: 'var(--shadow-sm)' }}>
-              <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+              {/* Original outreach email — same scroll, whitespace does the separation */}
+              <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>SUBJECT</span>
-                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>SUBJECT</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>
                     {outreach.subject || '(no subject)'}
                   </span>
                 </div>
@@ -376,18 +409,15 @@ export default function OutreachDetailPage() {
                 </span>
               </div>
 
-              {/* Email Content Body */}
+              {/* Email Content Body — plain reading text, no box or divider */}
               <div
                 style={{
+                  marginTop: '16px',
                   fontFamily: 'var(--font-sans)',
                   fontSize: 'var(--text-sm)',
                   color: 'var(--text-body)',
-                  lineHeight: '1.6',
+                  lineHeight: '1.65',
                   whiteSpace: 'pre-wrap',
-                  background: 'var(--surface-sunken)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '20px',
                 }}
               >
                 {outreach.body}
@@ -396,7 +426,7 @@ export default function OutreachDetailPage() {
               {/* Attachments */}
               {outreach.attachment_keys && outreach.attachment_keys.length > 0 && (
                 <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>ATTACHMENTS</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>ATTACHMENTS</span>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                     {outreach.attachment_keys.map((attachment, idx) => (
                       <button
@@ -411,7 +441,7 @@ export default function OutreachDetailPage() {
                     ))}
                   </div>
                   {attachmentError && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--status-critical-ink)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--status-refuted-ink)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)' }}>
                       <AlertCircle size={13} style={{ flexShrink: 0 }} />
                       <span>{attachmentError}</span>
                     </div>
@@ -421,64 +451,83 @@ export default function OutreachDetailPage() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: AI Debate & Action Center */}
+          {/* RIGHT PANE: decision console — verdict first, reasoning under it */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
             {/* Decision Consensus & Actions */}
             <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: isMobile ? '20px' : '28px', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              
-              <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px' }}>
-                <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '8px' }}>DEBATE RECOMMENDATION</span>
-                
-                {decision ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      padding: '4px 10px',
-                      borderRadius: 'var(--radius-sm)',
-                      background: decision.label === 'invite' ? 'rgba(16, 185, 129, 0.08)' : decision.label === 'request_more_info' ? 'rgba(245, 158, 11, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                      color: decision.label === 'invite' ? 'var(--status-verified-ink)' : decision.label === 'request_more_info' ? 'var(--status-triage-ink)' : 'var(--status-critical-ink)',
-                      border: `1px solid ${decision.label === 'invite' ? 'var(--status-verified-ink)' : decision.label === 'request_more_info' ? 'var(--status-triage-ink)' : 'var(--status-critical-ink)'}`.replace(')', ', 0.15)'),
-                    }}>
-                      {decision.label.replace(/_/g, ' ')}
-                    </span>
-                    {decision.overridden_by_professor && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-triage-ink)', fontWeight: 500 }}>
-                        <AlertTriangle size={14} /> Overridden by Professor
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Debate not completed.</span>
-                )}
-              </div>
 
-              {/* Debate replay entry point — the "wow" surface */}
+              {/* Verdict block — the loudest element on the page */}
+              {decision ? (
+                <div
+                  style={{
+                    background: VERDICT_META[decision.label].bg,
+                    borderLeft: `4px solid ${VERDICT_META[decision.label].accent}`,
+                    borderRadius: 'var(--radius-md)',
+                    padding: '18px 20px',
+                  }}
+                >
+                  <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: '10px', color: VERDICT_META[decision.label].ink, letterSpacing: '0.06em', marginBottom: '6px', opacity: 0.8 }}>
+                    DEBATE RECOMMENDATION
+                  </span>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontFamily: 'var(--font-brand)',
+                      fontWeight: 700,
+                      fontSize: decision.label === 'request_more_info' ? 'var(--text-display-sm)' : 'var(--text-display-lg)',
+                      lineHeight: 1.05,
+                      textTransform: 'uppercase',
+                      color: VERDICT_META[decision.label].ink,
+                      overflowWrap: 'break-word',
+                    }}
+                  >
+                    {VERDICT_META[decision.label].word}
+                  </span>
+                  {decision.overridden_by_professor && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '10px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-pending-ink)', fontWeight: 500 }}>
+                      <AlertTriangle size={14} /> Overridden by Professor
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px' }}>
+                  <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em', marginBottom: '8px' }}>DEBATE RECOMMENDATION</span>
+                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Debate not completed.</span>
+                </div>
+              )}
+
+              {/* Debate replay entry point — supports the verdict, secondary CTA */}
               {outreach.debate_trace_id && (
                 <Link
                   href={`/inbox/${outreach.id}/replay`}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                    textDecoration: 'none', padding: '10px 14px',
-                    background: 'var(--navy-900)', color: '#fff',
-                    borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-sans)',
-                    fontSize: 'var(--text-sm)', fontWeight: 600,
+                    textDecoration: 'none', padding: '9px 14px',
+                    background: 'transparent', color: 'var(--navy-900)',
+                    border: '1px solid var(--border-default)',
+                    borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-display)',
+                    fontSize: 'var(--text-sm)', fontWeight: 500,
                   }}
                 >
                   <Play size={14} /> Watch the debate replay
                 </Link>
               )}
 
-              {/* Rationale text */}
+              {/* Rationale — chunked into scannable sections */}
               {decision?.rationale && (
-                <div>
-                  <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '6px' }}>DECISION RATIONALE</span>
-                  <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: '1.5' }}>
-                    {decision.rationale}
-                  </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>DECISION RATIONALE</span>
+                  {chunkRationale(decision.rationale).map(({ heading, sentences }) => (
+                    <div key={heading}>
+                      <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: '4px' }}>
+                        {heading}
+                      </span>
+                      <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: '1.55' }}>
+                        {sentences.join(' ')}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -488,7 +537,7 @@ export default function OutreachDetailPage() {
                   display: 'flex', alignItems: 'center', gap: '10px',
                   background: 'rgba(245, 158, 11, 0.06)', border: '1px solid rgba(245, 158, 11, 0.2)',
                   borderRadius: 'var(--radius-md)', padding: '12px 14px',
-                  fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-triage-ink)',
+                  fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-pending-ink)',
                 }}>
                   <RefreshCw size={14} className="animate-spin" />
                   <span>This outreach is being processed by the AI pipeline. Actions will be available once triage is complete.</span>
@@ -513,7 +562,7 @@ export default function OutreachDetailPage() {
               {/* Reply Composer */}
               {outreach.status !== 'pending_triage' && outreach.status !== 'rejected' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                  <label style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
                     {outreach.status === 'replied' ? 'SENT REPLY' : 'REPLY DRAFT'}
                   </label>
                   <textarea
@@ -569,11 +618,11 @@ export default function OutreachDetailPage() {
               {/* Override Collapsible Form */}
               {showOverride && (
                 <form onSubmit={handleOverride} style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <h4 style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Specify decision override</h4>
+                  <h4 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>Specify decision override</h4>
                   
                   {/* Label selector */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>NEW DECISION STATUS</label>
+                    <label style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>NEW DECISION STATUS</label>
                     <select
                       value={overrideLabel}
                       onChange={(e) => setOverrideLabel(e.target.value as any)}
@@ -591,7 +640,7 @@ export default function OutreachDetailPage() {
 
                   {/* Rationale input */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>RATIONALE</label>
+                    <label style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>RATIONALE</label>
                     <textarea
                       value={overrideRationale}
                       onChange={(e) => setOverrideRationale(e.target.value)}
@@ -607,7 +656,7 @@ export default function OutreachDetailPage() {
 
                   {/* Draft Reply edit */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>REPLY DRAFT (OPTIONAL)</label>
+                    <label style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>REPLY DRAFT (OPTIONAL)</label>
                     <textarea
                       value={overrideReply}
                       onChange={(e) => setOverrideReply(e.target.value)}
@@ -637,14 +686,14 @@ export default function OutreachDetailPage() {
             <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <Sparkles size={16} style={{ color: 'var(--navy-900)' }} />
-                <h3 style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Extracted Fact Verification</h3>
+                <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>Extracted Fact Verification</h3>
               </div>
 
               {claims && claims.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {claims.map((claim, idx) => {
                     const statusIcon = claim.verified === true ? <Check size={12} /> : claim.verified === false ? <X size={12} /> : <span style={{ fontWeight: 600 }}>—</span>;
-                    const statusColor = claim.verified === true ? 'var(--status-verified-ink)' : claim.verified === false ? 'var(--status-critical-ink)' : 'var(--text-muted)';
+                    const statusColor = claim.verified === true ? 'var(--status-verified-ink)' : claim.verified === false ? 'var(--status-refuted-ink)' : 'var(--text-muted)';
                     const statusBg = claim.verified === true ? 'rgba(16, 185, 129, 0.08)' : claim.verified === false ? 'rgba(239, 68, 68, 0.08)' : 'rgba(0, 0, 0, 0.04)';
 
                     return (
