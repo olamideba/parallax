@@ -17,8 +17,8 @@ export function Tag({ children, removable, onRemove, tone = 'default', style = {
       display: 'inline-flex', alignItems: 'center', gap: '6px',
       padding: '3px 9px', borderRadius: 'var(--radius-sm)',
       border: `1px solid ${tones[tone].borderColor}`, background: tones[tone].background, color: tones[tone].color,
-      fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)' as any,
-      lineHeight: 1.4, whiteSpace: 'nowrap', ...style,
+      fontFamily: 'var(--font-display)', fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-regular)' as any,
+      letterSpacing: 'var(--tracking-snug)', lineHeight: 1.4, whiteSpace: 'nowrap', ...style,
     }} {...rest}>
       {children}
       {removable && (

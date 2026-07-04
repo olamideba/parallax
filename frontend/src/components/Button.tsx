@@ -51,8 +51,8 @@ export function Button({
 
   const base: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    fontFamily: 'var(--font-sans)', fontWeight: 'var(--weight-medium)' as React.CSSProperties['fontWeight'],
-    lineHeight: 1, letterSpacing: '0.005em', borderRadius: 'var(--radius-md)',
+    fontFamily: 'var(--font-display)', fontWeight: 'var(--weight-medium)' as React.CSSProperties['fontWeight'],
+    lineHeight: 1, letterSpacing: 'var(--tracking-snug)', borderRadius: 'var(--radius-md)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.45 : 1,
     width: fullWidth ? '100%' : 'auto',

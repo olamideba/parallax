@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 @import "./colors.css";
 @import "./typography.css";
@@ -31,20 +31,20 @@ body {
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   color: var(--text-strong);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
   letter-spacing: var(--tracking-snug);
   margin: 0 0 var(--space-4);
 }
 
-h1 { font-size: var(--text-display-lg); font-weight: var(--weight-semibold); }
+h1 { font-size: var(--text-display-lg); font-weight: var(--weight-bold); }
 h2 { font-size: var(--text-display-md); }
 h3 { font-size: var(--text-display-sm); }
 h4 { font-size: var(--text-xl); }
 
 h5, h6 {
-  font-family: var(--font-sans);
-  font-weight: var(--weight-semibold);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
   color: var(--text-strong);
   margin: 0 0 var(--space-2);
 }
@@ -85,6 +85,50 @@ hr {
 @keyframes pxFadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Review-queue rows: merged list with a quiet hover and a hover-revealed action. */
+.qrow {
+  transition: background 120ms ease;
+}
+.qrow:hover {
+  background: var(--gray-50);
+}
+.qrow .qrow-action {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.qrow:hover .qrow-action {
+  opacity: 1;
+}
+@media (hover: none) {
+  .qrow .qrow-action {
+    opacity: 1;
+  }
+}
+
+/* Neutral skeleton shimmer for in-flight data — never show a real "0". */
+@keyframes skeletonShimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.skeleton {
+  display: inline-block;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--gray-100) 25%,
+    var(--gray-200) 50%,
+    var(--gray-100) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

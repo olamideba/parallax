@@ -14,10 +14,6 @@ interface DebateAgentProps {
   /** Which way to face right now (listeners turn toward the speaker). */
   facing: SpriteDirection;
   dot: string;
-  /** Already typewriter-sliced by the page (deterministic off the playhead). */
-  speechText?: string;
-  /** Still revealing characters — show the blinking caret. */
-  typing?: boolean;
   /** Stagger for the one-shot entrance drop-in. */
   entranceIndex?: number;
 }
@@ -30,15 +26,11 @@ export default function DebateAgent({
   referenced,
   facing,
   dot,
-  speechText,
-  typing = false,
   entranceIndex = 0,
 }: DebateAgentProps) {
   const { seatKey, sprite } = ROLE_SEAT[role];
   const seat = SEATS[seatKey];
   const spriteSrc = getSpritePath(sprite, facing);
-  // Edge seats shift their bubble inward so it never clips the room border.
-  const bubbleAlign = seat.x < 24 ? 'left' : seat.x > 76 ? 'right' : 'center';
   // Speaking agents take a small step toward the table — unit vector to center.
   const dx = TABLE_CENTER.x - seat.x;
   const dy = TABLE_CENTER.y - seat.y;
@@ -56,16 +48,6 @@ export default function DebateAgent({
         zIndex: speaking ? seat.zIndex + 100 : seat.zIndex,
       }}
     >
-      {speaking && speechText && (
-        <div className={styles.bubblePositioner} data-align={bubbleAlign}>
-          <div
-            className={`${styles.speechBubble} ${typing ? styles.typingCaret : ''}`}
-            style={{ borderColor: `${dot}88` }}
-          >
-            {speechText}
-          </div>
-        </div>
-      )}
       <div
         className={`${styles.charBodyGroup} ${speaking ? styles.speaking : ''}`}
         style={{ animationDelay: `${entranceIndex * 0.12}s`, transform: stepTransform }}
