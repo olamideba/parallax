@@ -13,7 +13,7 @@ from src.adapters.orchestration.langgraph_engine import LangGraphNegotiationEngi
 from src.adapters.qwen_cloud.gatekeeper import QwenGatekeeper
 from src.adapters.qwen_cloud.reranker import QwenReranker
 from src.adapters.qwen_cloud.runtime import QwenLLMClient
-from src.adapters.storage.database import session_factory
+from src.adapters.storage.database import dispose_engine, session_factory
 from src.adapters.storage.object_storage import R2ObjectStorage
 from src.adapters.storage.repository_impl import (
     SqlDebateTraceRepository,
@@ -31,15 +31,21 @@ from src.entrypoints.workers.celery_app import celery_app
 
 
 async def _run_triage(outreach_id: UUID) -> TriageVerdict | None:
-    async with session_factory()() as session:
-        use_case = TriageOutreachUseCase(
-            outreach_repo=SqlOutreachRepository(session),
-            professor_repo=SqlProfessorRepository(session),
-            object_storage=R2ObjectStorage(),
-            pdf_extractor=PyMuPdfTextExtractor(),
-            gatekeeper=QwenGatekeeper(),
-        )
-        return await use_case.execute(outreach_id)
+    try:
+        async with session_factory()() as session:
+            use_case = TriageOutreachUseCase(
+                outreach_repo=SqlOutreachRepository(session),
+                professor_repo=SqlProfessorRepository(session),
+                object_storage=R2ObjectStorage(),
+                pdf_extractor=PyMuPdfTextExtractor(),
+                gatekeeper=QwenGatekeeper(),
+            )
+            return await use_case.execute(outreach_id)
+    finally:
+        # See dispose_engine() docstring: the cached engine must not survive
+        # past this task's event loop, or the next task in this worker
+        # process will crash reusing a pool bound to a closed loop.
+        await dispose_engine()
 
 
 @celery_app.task(name="parallax.intake.triage_and_ingest", bind=True, max_retries=3)
@@ -77,15 +83,19 @@ def _build_engine(professor: Professor, session: AsyncSession) -> NegotiationEng
 
 
 async def _run_debate(outreach_id: UUID) -> str | None:
-    async with session_factory()() as session:
-        use_case = RunDebateUseCase(
-            outreach_repo=SqlOutreachRepository(session),
-            professor_repo=SqlProfessorRepository(session),
-            trace_repo=SqlDebateTraceRepository(session),
-            engine_factory=lambda professor: _build_engine(professor, session),
-        )
-        trace_id = await use_case.execute(outreach_id)
-        return str(trace_id) if trace_id else None
+    try:
+        async with session_factory()() as session:
+            use_case = RunDebateUseCase(
+                outreach_repo=SqlOutreachRepository(session),
+                professor_repo=SqlProfessorRepository(session),
+                trace_repo=SqlDebateTraceRepository(session),
+                engine_factory=lambda professor: _build_engine(professor, session),
+            )
+            trace_id = await use_case.execute(outreach_id)
+            return str(trace_id) if trace_id else None
+    finally:
+        # See dispose_engine() docstring.
+        await dispose_engine()
 
 
 @celery_app.task(name="parallax.intake.run_debate", bind=True, max_retries=3)

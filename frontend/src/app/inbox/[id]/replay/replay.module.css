@@ -93,6 +93,73 @@
   animation: talkBounce 0.42s ease-in-out infinite;
 }
 
+/* ── Speaking indicator (in-scene, no text) ────────────────────────────── */
+
+/* Positioner owns placement + the tail; it shifts for edge seats so a
+   far-left/right speaker's indicator extends into the room instead of
+   clipping. The inner .typingBubble owns only the pop animation. */
+.bubblePositioner {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  width: max-content;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.bubblePositioner[data-align='center'] {
+  left: 50%;
+  transform: translateX(-50%);
+}
+.bubblePositioner[data-align='left'] {
+  left: 50%;
+  transform: translateX(-14%);
+}
+.bubblePositioner[data-align='right'] {
+  left: 50%;
+  transform: translateX(-86%);
+}
+
+/* Tail always points down at the sprite center regardless of shift. */
+.bubblePositioner::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  border: 5px solid transparent;
+  border-top-color: rgba(9, 14, 30, 0.95);
+}
+.bubblePositioner[data-align='center']::after {
+  left: 50%;
+  transform: translateX(-50%);
+}
+.bubblePositioner[data-align='left']::after {
+  left: 14%;
+  transform: translateX(-50%);
+}
+.bubblePositioner[data-align='right']::after {
+  left: 86%;
+  transform: translateX(-50%);
+}
+
+.typingBubble {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(9, 14, 30, 0.95);
+  border: 1px solid rgba(161, 171, 232, 0.4);
+  border-radius: 999px;
+  padding: 8px 11px;
+  transform-origin: bottom center;
+  animation: bubblePop 180ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.typingDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  display: inline-block;
+  animation: typingBounce 1s ease-in-out infinite;
+}
+
 /* ── Chat log (Slack-like) ─────────────────────────────────────────────── */
 
 .chatRow {
@@ -191,6 +258,30 @@
   }
 }
 
+@keyframes bubblePop {
+  0% {
+    transform: scale(0.6) translateY(4px);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes typingBounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
 @keyframes spotlightPulse {
   0%,
   100% {
@@ -246,6 +337,8 @@
   .spriteMotion.referenced,
   .charBodyGroup,
   .spotlight,
+  .typingBubble,
+  .typingDot,
   .chatRow {
     animation: none !important;
     transition: none !important;

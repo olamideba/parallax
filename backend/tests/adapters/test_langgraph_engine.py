@@ -335,6 +335,62 @@ async def test_no_gatekeeper_opening_when_reason_absent() -> None:
 
 
 @pytest.mark.asyncio
+async def test_continues_marker_gives_same_speaker_the_next_turn() -> None:
+    # The Moderator only ever picks "auditor" once — the second and third
+    # Auditor turns happen purely because [CONTINUES] force-routes the floor
+    # back, with no Moderator involvement (and no extra scripted pick needed).
+    models = {
+        AgentRole.GATEKEEPER: _moderator("auditor", "advocate", "assessor", "end"),
+        AgentRole.AUDITOR: FakeChatModel(
+            [
+                "Claim 1: VERIFIED — ok. [CONTINUES]",
+                "Claim 2: DISPUTED — no. [CONTINUES]",
+                "Claim 3: fine.",
+                "PASS",
+            ]
+        ),
+        AgentRole.ADVOCATE: FakeChatModel(["case.", "PASS"]),
+        AgentRole.ASSESSOR: FakeChatModel(["fine.", "PASS"]),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
+    }
+    outreach = _outreach()
+    outcome = await _engine(models).run(outreach, _professor(outreach.professor_id))
+
+    auditor_turns = [t for t in outcome.trace.turns if t.role == AgentRole.AUDITOR]
+    assert len(auditor_turns) == 3
+    assert auditor_turns[0].content == "Claim 1: VERIFIED — ok."
+    assert auditor_turns[1].content == "Claim 2: DISPUTED — no."
+    assert auditor_turns[2].content == "Claim 3: fine."
+    # The [CONTINUES] marker is stripped and never leaks into stored content.
+    assert all("CONTINUES" not in t.content for t in auditor_turns)
+    # All three stay in the same round — a continuation is not a loop-back.
+    assert len({t.round for t in auditor_turns}) == 1
+
+
+@pytest.mark.asyncio
+async def test_continuation_streak_is_capped_regardless_of_marker() -> None:
+    from src.config import get_settings
+
+    cap = get_settings().DEBATE_MAX_CONTINUATIONS
+    # The Auditor claims [CONTINUES] forever — the hard per-speaker cap must
+    # still force it to stop after `cap` consecutive turns, handing the floor
+    # back to the Moderator instead of monopolizing the debate.
+    endless = [f"Point {i}. [CONTINUES]" for i in range(cap + 3)]
+    models = {
+        AgentRole.GATEKEEPER: _moderator("auditor", "end"),
+        AgentRole.AUDITOR: FakeChatModel(list(endless)),
+        AgentRole.ADVOCATE: FakeChatModel(["PASS"]),
+        AgentRole.ASSESSOR: FakeChatModel(["PASS"]),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
+    }
+    outreach = _outreach()
+    outcome = await _engine(models, round_cap=5).run(outreach, _professor(outreach.professor_id))
+
+    auditor_turns = [t for t in outcome.trace.turns if t.role == AgentRole.AUDITOR]
+    assert len(auditor_turns) == cap
+
+
+@pytest.mark.asyncio
 async def test_arbitrator_closing_turn_appended_with_rationale() -> None:
     models = {
         AgentRole.GATEKEEPER: _moderator("advocate", "auditor", "assessor", "end"),

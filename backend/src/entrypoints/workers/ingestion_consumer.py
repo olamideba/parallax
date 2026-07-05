@@ -11,7 +11,7 @@ from src.adapters.ingestion.parsers.pdf_parser import PyMuPdfTextExtractor
 from src.adapters.ingestion.pdf_fetcher import HttpPdfFetcher
 from src.adapters.ingestion.vector_index import PgVectorStore
 from src.adapters.qwen_cloud.runtime import QwenLLMClient
-from src.adapters.storage.database import session_factory
+from src.adapters.storage.database import dispose_engine, session_factory
 from src.adapters.storage.object_storage import R2ObjectStorage
 from src.adapters.storage.repository_impl import SqlPublicationRepository
 from src.application.use_cases.ingest_publication import IngestPublicationUseCase
@@ -19,19 +19,26 @@ from src.entrypoints.workers.celery_app import celery_app
 
 
 async def _run(publication_id: UUID) -> str:
-    async with session_factory()() as session:
-        use_case = IngestPublicationUseCase(
-            publication_repo=SqlPublicationRepository(session),
-            object_storage=R2ObjectStorage(),
-            pdf_fetcher=HttpPdfFetcher(),
-            pdf_extractor=PyMuPdfTextExtractor(),
-            arxiv_gateway=ArxivApiGateway(),
-            doi_gateway=DoiApiGateway(),
-            llm_client=QwenLLMClient(),
-            vector_store=PgVectorStore(session),
-        )
-        pub = await use_case.execute(publication_id)
-        return pub.status.value
+    try:
+        async with session_factory()() as session:
+            use_case = IngestPublicationUseCase(
+                publication_repo=SqlPublicationRepository(session),
+                object_storage=R2ObjectStorage(),
+                pdf_fetcher=HttpPdfFetcher(),
+                pdf_extractor=PyMuPdfTextExtractor(),
+                arxiv_gateway=ArxivApiGateway(),
+                doi_gateway=DoiApiGateway(),
+                llm_client=QwenLLMClient(),
+                vector_store=PgVectorStore(session),
+            )
+            pub = await use_case.execute(publication_id)
+            return pub.status.value
+    finally:
+        # See dispose_engine() docstring in src/adapters/storage/database.py:
+        # the cached engine's asyncpg pool is bound to this task's event loop,
+        # which asyncio.run() closes on return — must not survive to the next
+        # task in this worker process.
+        await dispose_engine()
 
 
 @celery_app.task(name="parallax.ingest.publication", bind=True, max_retries=3)

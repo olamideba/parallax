@@ -21,6 +21,23 @@ def get_engine() -> AsyncEngine:
     return _engine
 
 
+async def dispose_engine() -> None:
+    """Tear down the cached engine and its connection pool.
+
+    The engine is a module-level singleton, but its asyncpg pool is bound to
+    whichever event loop was running when it was first created. Celery workers
+    call `asyncio.run(...)` once per task, which opens and closes a new loop
+    every time — so a cached engine from a prior task's (now-closed) loop
+    raises "Future attached to a different loop" on the next task in the same
+    worker process. Call this at the end of every Celery task's asyncio.run
+    body so the next task creates a fresh engine on its own fresh loop.
+    """
+    global _engine
+    if _engine is not None:
+        await _engine.dispose()
+        _engine = None
+
+
 def session_factory() -> sessionmaker:
     return sessionmaker(
         bind=get_engine(),
