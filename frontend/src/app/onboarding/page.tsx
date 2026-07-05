@@ -348,10 +348,10 @@ export default function OnboardingPage() {
   const handleFinishSetup = async () => {
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-
       // Publications are already saved individually as the user adds them.
-      // Just persist the profile.
+      // Just persist the profile. Completion itself is derived from this
+      // data on next login/root visit (open_slots/recruiting_topics set) —
+      // there's no separate "completed" flag to write.
       const budgetAmountInt = parseInt(fundingAmount.replace(/,/g, '')) || null;
       await api.patchProfessorProfile({
         open_slots: slots,
@@ -365,10 +365,6 @@ export default function OnboardingPage() {
         institution: institution.trim() || null,
         institution_country: institutionCountry.trim() || null,
       });
-
-      if (user) {
-        localStorage.setItem(`onboarding_completed_${user.id}`, 'true');
-      }
 
       router.push('/inbox');
     } catch (err) {
