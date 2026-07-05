@@ -194,6 +194,41 @@ async def get_debate_trace(
     return GlobalResponse(data=trace.model_dump(mode="json"), message="OK")
 
 
+@router.get("/{outreach_id}/debate/turns/{index}/audio")
+async def get_turn_audio(
+    outreach_id: UUID,
+    index: int,
+    current_professor: CurrentProfessorDep,
+    outreach_repo: OutreachRepoDep,
+    trace_repo: TraceRepoDep,
+    object_storage: ObjectStorageDep,
+) -> Response:
+    """Stream the synthesized speech for one debate turn, driving the replay's
+    audio. 404 when a turn has no audio yet (synthesis pending or failed) — the
+    replay treats that as a silent, heuristic-duration beat."""
+    outreach = await outreach_repo.get_by_id(outreach_id)
+    if not outreach or outreach.professor_id != current_professor.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Outreach not found")
+
+    trace = await trace_repo.get_by_outreach_id(outreach_id)
+    if not trace or index < 0 or index >= len(trace.turns):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Turn not found")
+
+    audio_key = trace.turns[index].audio_key
+    if not audio_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No audio for this turn"
+        )
+    try:
+        data = await object_storage.download(audio_key)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Turn audio is no longer available",
+        ) from exc
+    return Response(content=data, media_type="audio/mpeg")
+
+
 @router.post("/{outreach_id}/approve", response_model=GlobalResponse[dict])
 async def approve_decision(
     outreach_id: UUID,

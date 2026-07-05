@@ -65,6 +65,16 @@ class Settings(BaseSettings):
     # rerank every allowed query.
     RERANK_MIN_QUERY_WORDS: int = Field(default=6)
 
+    # Text-to-speech (DashScope Qwen3-TTS) for the debate replay. Rides on the
+    # same DASHSCOPE_API_KEY via dashscope.MultiModalConversation.call (plain
+    # HTTP, not the WebSocket-only CosyVoice tts_v2 client — that's a different
+    # model family and rejects these model ids with ModelNotFound).
+    DASHSCOPE_TTS_ENABLED: bool = Field(default=True)
+    DASHSCOPE_TTS_MODEL: str = Field(default="qwen3-tts-flash")
+    DASHSCOPE_TTS_TIMEOUT: float = Field(default=60.0)
+    # Words to keep a spoken line short enough to sound like speech, not prose.
+    DEBATE_SPOKEN_LINE_MAX_WORDS: int = Field(default=55)
+
     # Debate
     DEBATE_ROUND_CAP: int = Field(default=3)
     # Max tool-call iterations a single debater gets within one turn.

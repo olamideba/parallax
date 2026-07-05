@@ -13,6 +13,8 @@ from src.adapters.orchestration.langgraph_engine import LangGraphNegotiationEngi
 from src.adapters.qwen_cloud.gatekeeper import QwenGatekeeper
 from src.adapters.qwen_cloud.reranker import QwenReranker
 from src.adapters.qwen_cloud.runtime import QwenLLMClient
+from src.adapters.qwen_cloud.spoken_line import QwenSpokenLineWriter
+from src.adapters.qwen_cloud.tts import QwenTtsClient
 from src.adapters.storage.database import dispose_engine, session_factory
 from src.adapters.storage.object_storage import R2ObjectStorage
 from src.adapters.storage.repository_impl import (
@@ -22,6 +24,9 @@ from src.adapters.storage.repository_impl import (
     SqlPublicationRepository,
 )
 from src.application.use_cases.run_debate import RunDebateUseCase
+from src.application.use_cases.synthesize_debate_audio import (
+    SynthesizeDebateAudioUseCase,
+)
 from src.application.use_cases.triage_outreach import TriageOutreachUseCase
 from src.config import get_settings
 from src.domain.collaboration.negotiation_engine import NegotiationEngine
@@ -111,4 +116,43 @@ def run_debate(self, outreach_id: str, professor_id: str) -> dict:
         logger.exception("run_debate failed for {}", outreach_id)
         raise self.retry(exc=exc, countdown=30) from exc
 
+    # Synthesize replay audio off the critical path — the debate is already
+    # decided and persisted; audio arrives shortly after and never blocks HITL.
+    if trace_id and get_settings().DASHSCOPE_TTS_ENABLED:
+        synthesize_debate_audio.delay(outreach_id)
+
     return {"outreach_id": outreach_id, "debate_trace_id": trace_id}
+
+
+async def _synthesize_debate_audio(outreach_id: UUID, force: bool = False) -> int:
+    try:
+        async with session_factory()() as session:
+            use_case = SynthesizeDebateAudioUseCase(
+                trace_repo=SqlDebateTraceRepository(session),
+                spoken_line_writer=QwenSpokenLineWriter(),
+                tts_client=QwenTtsClient(),
+                object_storage=R2ObjectStorage(),
+            )
+            with logger.contextualize(outreach=str(outreach_id)[:8]):
+                return await use_case.execute(outreach_id, force=force)
+    finally:
+        # See dispose_engine() docstring.
+        await dispose_engine()
+
+
+@celery_app.task(name="parallax.intake.synthesize_debate_audio", bind=True, max_retries=2)
+def synthesize_debate_audio(self, outreach_id: str, force: bool = False) -> dict:
+    """Gives each debate turn a short spoken line + synthesized audio for the
+    replay. Best-effort: individual turn failures degrade silently; only an
+    outright failure (e.g. the whole trace unreadable) retries.
+
+    `force=True` re-synthesizes every turn even if it already has audio — use
+    this for a manual retry after fixing a synthesis bug, not on the normal
+    post-debate path (which only wants to fill in gaps)."""
+    try:
+        count = asyncio.run(_synthesize_debate_audio(UUID(outreach_id), force=force))
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("synthesize_debate_audio failed for {}", outreach_id)
+        raise self.retry(exc=exc, countdown=30) from exc
+
+    return {"outreach_id": outreach_id, "turns_synthesized": count}

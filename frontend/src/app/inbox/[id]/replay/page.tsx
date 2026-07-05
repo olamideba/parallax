@@ -16,6 +16,7 @@ import {
   ledgerCounts,
   ROLE_META,
 } from '@/lib/replay/timeline';
+import { useReplayAudio } from '@/lib/replay/useReplayAudio';
 import {
   ArrowLeft,
   ArrowRight,
@@ -179,6 +180,19 @@ export default function DebateReplayPage() {
   const atEnd = playheadMs >= totalMs && totalMs > 0;
   const atStart = playheadMs === 0 && !playing;
   const finalTurn = turns[turns.length - 1];
+
+  // Slave each turn's synthesized speech to the playhead. Disabled for the demo
+  // fixture (no real audio) and until a real trace has loaded.
+  useReplayAudio({
+    reviewId: id,
+    turns,
+    beats,
+    activeIdx,
+    playheadMs,
+    playing,
+    speed,
+    enabled: !isDemo && !loading && !!trace,
+  });
 
   // Which agents does the active speaker cite right now? They react in-scene.
   const referencedRoles = useMemo(() => {
