@@ -16,5 +16,7 @@ class SpokenLineWriter(ABC):
     """
 
     @abstractmethod
-    async def to_spoken_line(self, role: AgentRole, content: str) -> str:
+    async def to_spoken_line(
+        self, role: AgentRole, content: str, professor_name: str | None = None
+    ) -> str:
         raise NotImplementedError

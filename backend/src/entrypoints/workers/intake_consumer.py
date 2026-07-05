@@ -129,6 +129,7 @@ async def _synthesize_debate_audio(outreach_id: UUID, force: bool = False) -> in
         async with session_factory()() as session:
             use_case = SynthesizeDebateAudioUseCase(
                 trace_repo=SqlDebateTraceRepository(session),
+                professor_repo=SqlProfessorRepository(session),
                 spoken_line_writer=QwenSpokenLineWriter(),
                 tts_client=QwenTtsClient(),
                 object_storage=R2ObjectStorage(),

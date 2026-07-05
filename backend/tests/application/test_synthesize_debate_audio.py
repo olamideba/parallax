@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -41,8 +42,20 @@ class FakeTraceRepo:
         return trace
 
 
+class FakeProfessorRepo:
+    def __init__(self, professor=None) -> None:  # noqa: ANN001
+        self._professor = professor
+
+    async def get_by_id(self, professor_id):  # noqa: ANN001
+        return self._professor
+
+
 class FakeSpokenLineWriter:
-    async def to_spoken_line(self, role, content):  # noqa: ANN001
+    def __init__(self) -> None:
+        self.professor_names: list[str | None] = []
+
+    async def to_spoken_line(self, role, content, professor_name=None):  # noqa: ANN001
+        self.professor_names.append(professor_name)
         return f"spoken:{content[:10]}"
 
 
@@ -74,7 +87,13 @@ async def test_synthesizes_audio_for_each_turn() -> None:
     repo = FakeTraceRepo(trace)
     tts = FakeTts()
     storage = FakeStorage()
-    use_case = SynthesizeDebateAudioUseCase(repo, FakeSpokenLineWriter(), tts, storage)
+    use_case = SynthesizeDebateAudioUseCase(
+        trace_repo=repo,
+        professor_repo=FakeProfessorRepo(),
+        spoken_line_writer=FakeSpokenLineWriter(),
+        tts_client=tts,
+        object_storage=storage,
+    )
 
     count = await use_case.execute(trace.outreach_id)
 
@@ -84,7 +103,7 @@ async def test_synthesizes_audio_for_each_turn() -> None:
     assert saved is not None
     for i, turn in enumerate(saved.turns):
         assert turn.spoken_line is not None
-        assert turn.audio_key == f"debates/{trace.id}/turns/{i}.mp3"
+        assert turn.audio_key == f"debates/{trace.id}/turns/{i}.wav"
         assert turn.audio_duration_ms == 4200
         assert turn.audio_key in storage.uploaded
     # Each turn is voiced by its persona's distinct Qwen3-TTS voice.
@@ -92,10 +111,32 @@ async def test_synthesizes_audio_for_each_turn() -> None:
 
 
 @pytest.mark.asyncio
+async def test_professor_name_threaded_to_spoken_line() -> None:
+    trace = _trace([_turn(AgentRole.ADVOCATE, "content")])
+    professor = SimpleNamespace(display_name="Dr. Olamide Olamide")
+    writer = FakeSpokenLineWriter()
+    use_case = SynthesizeDebateAudioUseCase(
+        trace_repo=FakeTraceRepo(trace),
+        professor_repo=FakeProfessorRepo(professor),
+        spoken_line_writer=writer,
+        tts_client=FakeTts(),
+        object_storage=FakeStorage(),
+    )
+
+    await use_case.execute(trace.outreach_id)
+
+    assert writer.professor_names == ["Dr. Olamide Olamide"]
+
+
+@pytest.mark.asyncio
 async def test_missing_trace_is_noop() -> None:
     repo = FakeTraceRepo(None)
     use_case = SynthesizeDebateAudioUseCase(
-        repo, FakeSpokenLineWriter(), FakeTts(), FakeStorage()
+        trace_repo=repo,
+        professor_repo=FakeProfessorRepo(),
+        spoken_line_writer=FakeSpokenLineWriter(),
+        tts_client=FakeTts(),
+        object_storage=FakeStorage(),
     )
 
     count = await use_case.execute(uuid4())
@@ -117,7 +158,11 @@ async def test_per_turn_failure_degrades_silently() -> None:
             return await super().synthesize(text, voice)
 
     use_case = SynthesizeDebateAudioUseCase(
-        repo, FakeSpokenLineWriter(), HalfBrokenTts(), FakeStorage()
+        trace_repo=repo,
+        professor_repo=FakeProfessorRepo(),
+        spoken_line_writer=FakeSpokenLineWriter(),
+        tts_client=HalfBrokenTts(),
+        object_storage=FakeStorage(),
     )
 
     count = await use_case.execute(trace.outreach_id)
@@ -134,12 +179,16 @@ async def test_per_turn_failure_degrades_silently() -> None:
 @pytest.mark.asyncio
 async def test_already_synthesized_turns_are_skipped() -> None:
     done = _turn(AgentRole.ADVOCATE, "already done")
-    done.audio_key = "debates/x/turns/0.mp3"
+    done.audio_key = "debates/x/turns/0.wav"
     trace = _trace([done, _turn(AgentRole.AUDITOR, "needs audio")])
     repo = FakeTraceRepo(trace)
     tts = FakeTts()
     use_case = SynthesizeDebateAudioUseCase(
-        repo, FakeSpokenLineWriter(), tts, FakeStorage()
+        trace_repo=repo,
+        professor_repo=FakeProfessorRepo(),
+        spoken_line_writer=FakeSpokenLineWriter(),
+        tts_client=tts,
+        object_storage=FakeStorage(),
     )
 
     count = await use_case.execute(trace.outreach_id)
@@ -151,13 +200,17 @@ async def test_already_synthesized_turns_are_skipped() -> None:
 @pytest.mark.asyncio
 async def test_force_resynthesizes_already_done_turns() -> None:
     done = _turn(AgentRole.ADVOCATE, "already done")
-    done.audio_key = "debates/x/turns/0.mp3"
+    done.audio_key = "debates/x/turns/0.wav"
     done.audio_duration_ms = 999
     trace = _trace([done, _turn(AgentRole.AUDITOR, "needs audio")])
     repo = FakeTraceRepo(trace)
     tts = FakeTts()
     use_case = SynthesizeDebateAudioUseCase(
-        repo, FakeSpokenLineWriter(), tts, FakeStorage()
+        trace_repo=repo,
+        professor_repo=FakeProfessorRepo(),
+        spoken_line_writer=FakeSpokenLineWriter(),
+        tts_client=tts,
+        object_storage=FakeStorage(),
     )
 
     count = await use_case.execute(trace.outreach_id, force=True)

@@ -29,7 +29,7 @@ PERSONAS: dict[AgentRole, Persona] = {
             "Warm and decisive. You triage fast and explain your gut read plainly, "
             "like a trusted assistant briefing the room."
         ),
-        voice_id="Aleke",
+        voice_id="Ethan",
     ),
     AgentRole.ADVOCATE: Persona(
         name="Leslie",
@@ -47,7 +47,7 @@ PERSONAS: dict[AgentRole, Persona] = {
             "Sharp, precise, a little dry. You press on vague or inflated claims "
             "without being unkind — you just want the record straight."
         ),
-        voice_id="Catherine",
+        voice_id="Serena",
     ),
     AgentRole.ASSESSOR: Persona(
         name="Lami",
@@ -64,7 +64,7 @@ PERSONAS: dict[AgentRole, Persona] = {
         voice=(
             "Measured and fair. You weigh the whole room and decide with warmth and clarity."
         ),
-        voice_id="Cang Mingzi",
+        voice_id="Dylan",
     ),
 }
 

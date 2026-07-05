@@ -6,7 +6,10 @@ from loguru import logger
 
 from src.adapters.qwen_cloud.personas import persona_for
 from src.application.ports.outbound.object_storage import ObjectStorage
-from src.application.ports.outbound.repository import DebateTraceRepository
+from src.application.ports.outbound.repository import (
+    DebateTraceRepository,
+    ProfessorRepository,
+)
 from src.application.ports.outbound.spoken_line_writer import SpokenLineWriter
 from src.application.ports.outbound.tts_client import TextToSpeechClient
 from src.domain.models.society import DebateTrace, DebateTurn
@@ -25,11 +28,13 @@ class SynthesizeDebateAudioUseCase:
     def __init__(
         self,
         trace_repo: DebateTraceRepository,
+        professor_repo: ProfessorRepository,
         spoken_line_writer: SpokenLineWriter,
         tts_client: TextToSpeechClient,
         object_storage: ObjectStorage,
     ) -> None:
         self._trace_repo = trace_repo
+        self._professor_repo = professor_repo
         self._spoken_line_writer = spoken_line_writer
         self._tts = tts_client
         self._storage = object_storage
@@ -40,12 +45,17 @@ class SynthesizeDebateAudioUseCase:
             logger.warning("Audio: no trace for outreach {}", outreach_id)
             return 0
 
+        # Load the professor once so the spoken lines can name them correctly
+        # (avoids the model guessing a gendered pronoun for the professor).
+        professor = await self._professor_repo.get_by_id(trace.professor_id)
+        professor_name = professor.display_name if professor else None
+
         synthesized = 0
         for index, turn in enumerate(trace.turns):
             if turn.audio_key is not None and not force:
                 # Idempotent re-run — leave already-synthesized turns alone.
                 continue
-            if await self._synthesize_turn(trace, index, turn):
+            if await self._synthesize_turn(trace, index, turn, professor_name):
                 synthesized += 1
 
         await self._trace_repo.save(trace)
@@ -58,17 +68,21 @@ class SynthesizeDebateAudioUseCase:
         return synthesized
 
     async def _synthesize_turn(
-        self, trace: DebateTrace, index: int, turn: DebateTurn
+        self,
+        trace: DebateTrace,
+        index: int,
+        turn: DebateTurn,
+        professor_name: str | None,
     ) -> bool:
         try:
             spoken_line = await self._spoken_line_writer.to_spoken_line(
-                turn.role, turn.content
+                turn.role, turn.content, professor_name
             )
             if not spoken_line:
                 return False
             voice = persona_for(turn.role).voice_id
             speech = await self._tts.synthesize(spoken_line, voice)
-            key = f"debates/{trace.id}/turns/{index}.mp3"
+            key = f"debates/{trace.id}/turns/{index}.wav"
             await self._storage.upload(key, speech.audio, content_type=speech.content_type)
         except Exception:  # noqa: BLE001 — one turn's failure must not sink the rest
             logger.exception(

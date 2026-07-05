@@ -226,7 +226,8 @@ async def get_turn_audio(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Turn audio is no longer available",
         ) from exc
-    return Response(content=data, media_type="audio/mpeg")
+    media_type = "audio/wav" if audio_key.endswith(".wav") else "audio/mpeg"
+    return Response(content=data, media_type=media_type)
 
 
 @router.post("/{outreach_id}/approve", response_model=GlobalResponse[dict])
