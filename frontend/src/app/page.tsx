@@ -15,21 +15,23 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    // Check initial session
+    // The root route is just a redirect gate: authenticated professors always
+    // land in their inbox (the app's home base), never back in the onboarding
+    // wizard — onboarding is a one-time first-run flow, not something to
+    // re-enter on every visit. Unauthenticated visitors go to /login.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setUser(session.user);
-        checkOnboardingAndRedirect(session.user.id);
+        router.push('/inbox');
       } else {
         router.push('/login');
       }
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         setUser(session.user);
-        checkOnboardingAndRedirect(session.user.id);
+        router.push('/inbox');
       } else {
         router.push('/login');
       }
@@ -39,18 +41,6 @@ export default function Home() {
       subscription.unsubscribe();
     };
   }, [router]);
-
-  const checkOnboardingAndRedirect = (userId: string) => {
-    const onboardingCompleted = localStorage.getItem(`onboarding_completed_${userId}`);
-    if (onboardingCompleted === 'true') {
-      // Once onboarding is completed, you go to the inbox page.
-      // Since inbox/ is a separate page we will create or redirect to,
-      // let's redirect to '/inbox' or show a success state.
-      router.push('/inbox');
-    } else {
-      router.push('/onboarding');
-    }
-  };
 
   return (
     <div

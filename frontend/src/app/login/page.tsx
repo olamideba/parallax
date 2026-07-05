@@ -183,15 +183,27 @@ export default function LoginPage() {
               required
             />
 
-            <Input
-              label="Password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
-              required
-            />
+            <div>
+              <Input
+                label="Password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+                required
+              />
+              <div style={{ textAlign: 'right', marginTop: '8px' }}>
+                <Link
+                  href="/forgot-password"
+                  style={{ fontSize: 'var(--text-xs)', color: 'var(--text-accent)', fontWeight: 500, textDecoration: 'none' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            </div>
 
             <Button type="submit" variant="primary" fullWidth disabled={loading} style={{ marginTop: '8px' }}>
               {loading ? 'Verifying...' : 'Sign in'}

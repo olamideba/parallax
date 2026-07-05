@@ -35,8 +35,8 @@ class Settings(BaseSettings):
     # Qwen / DashScope
     DASHSCOPE_API_KEY: str = Field(default="")
     QWEN_MODEL_GATEKEEPER: str = Field(default="qwen-turbo")
-    QWEN_MODEL_DEBATE: str = Field(default="qwen-plus")
-    QWEN_MODEL_ARBITRATOR: str = Field(default="qwen-plus")
+    QWEN_MODEL_DEBATE: str = Field(default="qwen3.5-flash")
+    QWEN_MODEL_ARBITRATOR: str = Field(default="qwen3.6-flash")
     # DashScope OpenAI-compatible endpoint + embeddings.
     DASHSCOPE_BASE_URL: str = Field(
         default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     DEBATE_MAX_TOOL_ROUNDS: int = Field(default=3)
     # How many baseline corpus chunks are pre-fetched for the debaters.
     DEBATE_BASELINE_CHUNKS: int = Field(default=4)
+    # Max consecutive [CONTINUES] turns one debater gets before being cut off
+    # (e.g. an Auditor working through several claims one at a time). A hard
+    # safety net independent of the overall turn cap below.
+    DEBATE_MAX_CONTINUATIONS: int = Field(default=4)
 
     # Cloudflare R2
     R2_ACCOUNT_ID: str = Field(default="")

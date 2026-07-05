@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -100,6 +100,14 @@ export default function InboxPage() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
 
+  // Track "have we ever successfully loaded this" outside of React state so
+  // a background refresh (e.g. tab refocus re-validating the session) can
+  // skip re-showing the loading skeleton without needing to be a dependency
+  // of the fetch effects.
+  const userIdRef = useRef<string | null>(null);
+  const hasLoadedProfileRef = useRef(false);
+  const hasLoadedQueueRef = useRef(false);
+
   const toggleRow = (id: string) => {
     setSelectedRows((prev) => {
       const next = new Set(prev);
@@ -127,10 +135,27 @@ export default function InboxPage() {
   }, [allOutreaches, activeTab]);
 
   useEffect(() => {
+    // Supabase re-validates the session (and fires SIGNED_IN/TOKEN_REFRESHED)
+    // every time the tab regains focus/visibility, not just on actual login.
+    // Only treat it as a "new session" when the user identity actually
+    // changes — otherwise every tab-switch would reset the page to loading.
+    const applySession = (session: NonNullable<Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']>) => {
+      const isNewUser = session.user.id !== userIdRef.current;
+      if (isNewUser) {
+        // A genuinely different signed-in user — reset the "already loaded"
+        // markers so their data gets a real loading state, not stale skeletons.
+        hasLoadedProfileRef.current = false;
+        hasLoadedQueueRef.current = false;
+      }
+      userIdRef.current = session.user.id;
+      setUser((prev: any) => (prev?.id === session.user.id ? prev : session.user));
+      setDisplayName(session.user.user_metadata?.display_name || 'Dr. Professor');
+      return isNewUser;
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        setUser(session.user);
-        setDisplayName(session.user.user_metadata?.display_name || 'Dr. Professor');
+        applySession(session);
         loadBackendProfile();
       } else {
         router.push('/login');
@@ -139,9 +164,8 @@ export default function InboxPage() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
-        setUser(session.user);
-        setDisplayName(session.user.user_metadata?.display_name || 'Dr. Professor');
-        loadBackendProfile();
+        const isNewUser = applySession(session);
+        if (isNewUser) loadBackendProfile();
       } else {
         router.push('/login');
       }
@@ -154,7 +178,9 @@ export default function InboxPage() {
 
   const loadBackendProfile = async () => {
     try {
-      setLoadingProfile(true);
+      // Only show the loading skeleton on the first load — a background
+      // refresh (tab refocus) shouldn't blank out already-rendered data.
+      if (!hasLoadedProfileRef.current) setLoadingProfile(true);
       const prof = await api.getProfessorProfile();
       setProfile(prof);
       setDisplayName(prof.display_name);
@@ -166,6 +192,7 @@ export default function InboxPage() {
       } else {
         setFunding('');
       }
+      hasLoadedProfileRef.current = true;
     } catch (err) {
       console.warn('Could not load profile from backend:', err);
     } finally {
@@ -173,16 +200,20 @@ export default function InboxPage() {
     }
   };
 
-  // Fetch outreach queue
+  // Fetch outreach queue. Keyed on user.id (not the user object) so a
+  // same-identity session refresh (tab refocus) can't retrigger this.
   useEffect(() => {
     if (!user) return;
 
     const fetchQueue = async () => {
       try {
-        setLoadingQueue(true);
+        // Same first-load-only rule as the profile: don't blank the list on
+        // a silent background refresh.
+        if (!hasLoadedQueueRef.current) setLoadingQueue(true);
         setApiError(null);
         const data = await api.getReviewsQueue();
         setAllOutreaches(data);
+        hasLoadedQueueRef.current = true;
       } catch (err: any) {
         console.error('Failed to load queue:', err);
         setApiError(err.message || 'Failed to connect to the backend server.');
@@ -193,18 +224,12 @@ export default function InboxPage() {
     };
 
     fetchQueue();
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const handleSignout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
-  };
-
-  const handleResetOnboarding = () => {
-    if (user) {
-      localStorage.removeItem(`onboarding_completed_${user.id}`);
-      router.push('/onboarding');
-    }
   };
 
   const effectiveSlots = Math.max(0, parseInt(slots) - parseInt(committed));
@@ -268,8 +293,10 @@ export default function InboxPage() {
           boxSizing: 'border-box',
         }}
       >
-        {/* Left Side: Inbox review queue */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {/* Left Side: Inbox review queue. minWidth 0 lets the queue column
+            shrink below the rows' nowrap content so snippets ellipsize instead
+            of stretching the grid. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
           <div>
             <span
               style={{
@@ -701,9 +728,11 @@ export default function InboxPage() {
 
             <hr style={{ border: 'none', borderTop: '1px solid var(--border-subtle)', margin: 0 }} />
 
-            <Button variant="secondary" size="sm" onClick={handleResetOnboarding} leadingIcon={<Settings size={14} />}>
-              Re-run lab setup
-            </Button>
+            <Link href="/settings" style={{ textDecoration: 'none' }}>
+              <Button variant="secondary" size="sm" fullWidth leadingIcon={<Settings size={14} />}>
+                Lab settings
+              </Button>
+            </Link>
           </div>
         </div>
       </main>

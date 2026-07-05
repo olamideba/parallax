@@ -31,6 +31,8 @@ export default function DebateAgent({
   const { seatKey, sprite } = ROLE_SEAT[role];
   const seat = SEATS[seatKey];
   const spriteSrc = getSpritePath(sprite, facing);
+  // Edge seats shift their bubble inward so it never clips the room border.
+  const bubbleAlign = seat.x < 24 ? 'left' : seat.x > 76 ? 'right' : 'center';
   // Speaking agents take a small step toward the table — unit vector to center.
   const dx = TABLE_CENTER.x - seat.x;
   const dy = TABLE_CENTER.y - seat.y;
@@ -48,6 +50,15 @@ export default function DebateAgent({
         zIndex: speaking ? seat.zIndex + 100 : seat.zIndex,
       }}
     >
+      {speaking && (
+        <div className={styles.bubblePositioner} data-align={bubbleAlign}>
+          <div className={styles.typingBubble} style={{ borderColor: `${dot}88` }}>
+            <span className={styles.typingDot} style={{ background: dot, animationDelay: '0ms' }} />
+            <span className={styles.typingDot} style={{ background: dot, animationDelay: '160ms' }} />
+            <span className={styles.typingDot} style={{ background: dot, animationDelay: '320ms' }} />
+          </div>
+        </div>
+      )}
       <div
         className={`${styles.charBodyGroup} ${speaking ? styles.speaking : ''}`}
         style={{ animationDelay: `${entranceIndex * 0.12}s`, transform: stepTransform }}

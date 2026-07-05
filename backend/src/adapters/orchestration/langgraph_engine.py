@@ -46,6 +46,7 @@ _DEBATER_ROLES: tuple[AgentRole, ...] = (
 )
 _RECEIPT_RE = re.compile(r'\[RECEIPT:\s*"([^"]+)"\s*,\s*"([^"]+)"\]')
 _REF_RE = re.compile(r"\[REF:\s*(\d+)\]")
+_CONTINUES_RE = re.compile(r"\s*\[CONTINUES\]\s*$")
 
 # How each bindable tool is classified on the replay's AgentAction chips.
 _ACTION_KINDS: dict[str, tuple[ActionKind, str]] = {
@@ -75,6 +76,14 @@ class _DebateState(TypedDict):
     round: int
     spoken_this_round: list[str]
     next_speaker: str
+    # Set when the last turn ended with [CONTINUES]: the same debater still has
+    # more to say, so the Moderator must route back to them next rather than
+    # picking freely — this is what lets one point-per-turn stay speech-length
+    # instead of one long turn covering every point at once.
+    continuing_speaker: str | None
+    # How many consecutive turns continuing_speaker has already taken — bounds
+    # a single debater's streak regardless of how many times it says CONTINUES.
+    continuation_count: int
     consecutive_passes: int
     turn_count: int
     decision: Decision | None
@@ -82,6 +91,18 @@ class _DebateState(TypedDict):
 
 def _is_pass(content: str) -> bool:
     return content.strip().rstrip(".").upper() == "PASS"
+
+
+def _split_continuation(content: str) -> tuple[str, bool]:
+    """Strip a trailing [CONTINUES] marker, returning (clean_content, continues).
+
+    A debater appends this when it has more distinct points queued up (e.g. the
+    Auditor mid-way through a claim-by-claim audit) so the turn stays short and
+    speech-length instead of one long wall covering every point at once."""
+    match = _CONTINUES_RE.search(content)
+    if not match:
+        return content, False
+    return content[: match.start()].rstrip(), True
 
 
 def _parse_receipts(content: str) -> list[Receipt]:
@@ -163,6 +184,8 @@ class LangGraphNegotiationEngine(NegotiationEngine):
                 "round": 1,
                 "spoken_this_round": [],
                 "next_speaker": "",
+                "continuing_speaker": None,
+                "continuation_count": 0,
                 "consecutive_passes": 0,
                 "turn_count": 0,
                 "decision": None,
@@ -200,7 +223,12 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         base_context: dict[str, Any],
         max_tool_rounds: int,
     ):
-        max_turns = self.round_cap * len(_DEBATER_ROLES)
+        max_continuations = get_settings().DEBATE_MAX_CONTINUATIONS
+        # A debater can now take multiple turns per round via [CONTINUES]
+        # (bounded by max_continuations), so the hard turn cap needs headroom
+        # beyond "one turn per debater per round" or debates would get cut off
+        # mid-argument well before the round cap is reached.
+        max_turns = self.round_cap * len(_DEBATER_ROLES) * max_continuations
 
         async def moderator(state: _DebateState) -> dict:
             return await self._moderate(state, base_context, max_turns)
@@ -208,26 +236,39 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         async def speak(state: _DebateState) -> dict:
             role = AgentRole(state["next_speaker"])
             transcript = state["turns"]
+            is_continuation = state["continuing_speaker"] == role.value
 
             # Soft round grouping for the replay: a "round" is a wave in which
-            # each role speaks at most once; looping back to a role starts one.
+            # each role speaks at most once; looping back to a role starts a new
+            # one. A continuation of the same still-unfinished point is not a
+            # loop-back — it stays in the current round.
             round_number = state["round"]
             spoken_this_round = list(state["spoken_this_round"])
-            if role.value in spoken_this_round:
-                round_number += 1
-                spoken_this_round = []
-            spoken_this_round.append(role.value)
+            if not is_continuation:
+                if role.value in spoken_this_round:
+                    round_number += 1
+                    spoken_this_round = []
+                spoken_this_round.append(role.value)
 
-            turn = await self._debater_turn(
+            turn, continues = await self._debater_turn(
                 role, transcript, round_number, retrieval_tool, base_context, max_tool_rounds
             )
             passed = turn is None
+            # Force-stop a runaway continuer once the streak hits the cap,
+            # regardless of what the model asked for — a hard safety net so a
+            # single voice can never monopolize the debate turn after turn.
+            next_count = state["continuation_count"] + 1 if is_continuation else 1
+            continues = continues and next_count < max_continuations
             return {
                 "turns": [] if passed else [turn],
                 "dispatched": [role.value],
                 "round": round_number,
                 "spoken_this_round": spoken_this_round,
-                "consecutive_passes": state["consecutive_passes"] + 1 if passed else 0,
+                "continuing_speaker": role.value if continues else None,
+                "continuation_count": next_count if continues else 0,
+                "consecutive_passes": 0 if continues else (
+                    state["consecutive_passes"] + 1 if passed else 0
+                ),
                 "turn_count": state["turn_count"] + 1,
             }
 
@@ -257,6 +298,12 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         all-passed check backstop the model so the debate always terminates."""
         dispatched = set(state["dispatched"])
         all_heard = {r.value for r in _DEBATER_ROLES} <= dispatched
+
+        # A debater mid-way through a multi-point turn (ended with [CONTINUES])
+        # always gets the floor back next — no need to ask the model, and no
+        # other voice may interrupt a still-unfinished point.
+        if state["continuing_speaker"] is not None:
+            return {"next_speaker": state["continuing_speaker"]}
 
         # Hard safety nets — never let the model run the debate forever.
         if state["turn_count"] >= max_turns:
@@ -301,7 +348,7 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         retrieval_tool: BaseTool,
         base_context: dict[str, Any],
         max_tool_rounds: int,
-    ) -> DebateTurn | None:
+    ) -> tuple[DebateTurn | None, bool]:
         prompt = render_prompt(
             f"{role.value}.j2",
             round_number=round_number,
@@ -345,9 +392,13 @@ class LangGraphNegotiationEngine(NegotiationEngine):
 
         content = str(response.content).strip()
         if not content or _is_pass(content):
-            return None
+            return None, False
 
-        return DebateTurn(
+        content, continues = _split_continuation(content)
+        if not content:
+            return None, False
+
+        turn = DebateTurn(
             round=round_number,
             role=role,
             content=content,
@@ -356,6 +407,7 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             references_turn_ids=_parse_references(content, len(transcript)),
             created_at=datetime.now(UTC),
         )
+        return turn, continues
 
     async def _invoke_tool(
         self,

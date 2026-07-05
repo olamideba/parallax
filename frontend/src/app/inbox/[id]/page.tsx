@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -81,11 +81,26 @@ export default function OutreachDetailPage() {
   const [retriaging, setRetriaging] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Supabase re-validates the session (firing SIGNED_IN/TOKEN_REFRESHED) every
+  // time the tab regains focus — not just on real sign-in. Track the last
+  // seen user id outside React state so these no-op events don't retrigger
+  // the outreach fetch and blank out the page (including any in-progress
+  // override form / reply draft) on a simple tab switch.
+  const userIdRef = useRef<string | null>(null);
+  const hasLoadedRef = useRef(false);
+
   useEffect(() => {
+    const applySession = (session: NonNullable<Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']>) => {
+      const isNewUser = session.user.id !== userIdRef.current;
+      if (isNewUser) hasLoadedRef.current = false;
+      userIdRef.current = session.user.id;
+      setUser((prev: any) => (prev?.id === session.user.id ? prev : session.user));
+      setDisplayName(session.user.user_metadata?.display_name || 'Dr. Professor');
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        setUser(session.user);
-        setDisplayName(session.user.user_metadata?.display_name || 'Dr. Professor');
+        applySession(session);
       } else {
         router.push('/login');
       }
@@ -93,8 +108,7 @@ export default function OutreachDetailPage() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
-        setUser(session.user);
-        setDisplayName(session.user.user_metadata?.display_name || 'Dr. Professor');
+        applySession(session);
       } else {
         router.push('/login');
       }
@@ -108,7 +122,10 @@ export default function OutreachDetailPage() {
   const loadOutreach = async () => {
     if (!id) return;
     try {
-      setLoading(true);
+      // Only show the full-page loader on first load — a background
+      // refresh (tab refocus) shouldn't blank the page out from under
+      // whatever the professor is doing (override form, reply draft, etc).
+      if (!hasLoadedRef.current) setLoading(true);
       setError(null);
       const data = await api.getReviewDetail(id);
       setOutreach(data);
@@ -121,6 +138,7 @@ export default function OutreachDetailPage() {
           setReplyBody(data.decision.drafted_reply || '');
         }
       }
+      hasLoadedRef.current = true;
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Failed to load outreach details from the backend.');
@@ -133,7 +151,10 @@ export default function OutreachDetailPage() {
     if (user && id) {
       loadOutreach();
     }
-  }, [user, id]);
+    // Keyed on user?.id (stable across no-op session-refresh events) and id —
+    // not the user object, whose identity churns on every tab refocus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, id]);
 
   const handleApprove = async () => {
     if (!outreach) return;
@@ -504,7 +525,7 @@ export default function OutreachDetailPage() {
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                     textDecoration: 'none', padding: '9px 14px',
-                    background: 'transparent', color: 'var(--navy-900)',
+                    background: 'var(--action)', color: 'var(--action-text)',
                     border: '1px solid var(--border-default)',
                     borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-display)',
                     fontSize: 'var(--text-sm)', fontWeight: 500,
