@@ -24,6 +24,7 @@ from src.adapters.qwen_cloud.personas import (
     persona_for,
 )
 from src.adapters.qwen_cloud.templates import render_prompt
+from src.adapters.qwen_cloud.token_logging import reset_token_totals, token_totals
 from src.adapters.qwen_cloud.tool_registry import tools_for_role
 from src.config import get_settings
 from src.domain.collaboration.negotiation_engine import DebateOutcome, NegotiationEngine
@@ -47,6 +48,20 @@ _DEBATER_ROLES: tuple[AgentRole, ...] = (
 _RECEIPT_RE = re.compile(r'\[RECEIPT:\s*"([^"]+)"\s*,\s*"([^"]+)"\]')
 _REF_RE = re.compile(r"\[REF:\s*(\d+)\]")
 _CONTINUES_RE = re.compile(r"\s*\[CONTINUES\]\s*$")
+
+# Prepended to a debater's prompt when it's picking up its *own* unfinished turn
+# (it ended the previous one with [CONTINUES]). Overrides the base prompt's
+# "live conversation, address the others" framing so the model doesn't fabricate
+# an interlocutor or address itself by name mid-continuation.
+_CONTINUATION_DIRECTIVE = (
+    "YOU ARE CONTINUING YOUR OWN PREVIOUS STATEMENT. This is not a new turn and "
+    "no one has spoken since you — pick up exactly where you left off, in the "
+    "first person, and make your NEXT single point. Do NOT open by reacting to, "
+    "quoting, agreeing with, or naming another debater, and never address "
+    "yourself by name — you are still mid-thought. Any [REF:n] must point at a "
+    "turn that already exists in the transcript below. End with [CONTINUES] "
+    "again only if you still have a further, distinct point after this one.\n\n"
+)
 
 # How each bindable tool is classified on the replay's AgentAction chips.
 _ACTION_KINDS: dict[str, tuple[ActionKind, str]] = {
@@ -105,6 +120,44 @@ def _split_continuation(content: str) -> tuple[str, bool]:
     return content[: match.start()].rstrip(), True
 
 
+def _log_turn(
+    role: AgentRole,
+    round_number: int,
+    turn: DebateTurn | None,
+    passed: bool,
+    continues: bool,
+    capped: bool,
+    streak: int,
+) -> None:
+    """One human-readable line per debate turn: who spoke, a preview of what
+    they said, any tools they reached for, and whether they yielded or hold the
+    floor. This is the narrative that makes a background debate legible live."""
+    name = persona_for(role).name
+    if passed or turn is None:
+        logger.info("💬 [R{}] {} ({}) passed", round_number, role.value.upper(), name)
+        return
+
+    preview = " ".join(turn.content.split())[:140]
+    tool_note = ""
+    if turn.actions:
+        kinds = ", ".join(a.name for a in turn.actions)
+        tool_note = f" · 🔧 {kinds}"
+    tail = ""
+    if capped:
+        tail = " · ✋ continuation cap hit, yielding"
+    elif continues:
+        tail = f" · ↻ continues ({streak})"
+    logger.info(
+        '💬 [R{}] {} ({}){}: "{}"{}',
+        round_number,
+        role.value.upper(),
+        name,
+        tool_note,
+        preview,
+        tail,
+    )
+
+
 def _parse_receipts(content: str) -> list[Receipt]:
     return [
         Receipt(source_title=title, chunk_text=excerpt)
@@ -115,6 +168,38 @@ def _parse_receipts(content: str) -> list[Receipt]:
 def _parse_references(content: str, transcript_len: int) -> list[int]:
     refs = {int(n) for n in _REF_RE.findall(content)}
     return sorted(n for n in refs if 0 <= n < transcript_len)
+
+
+# How much of a receipt's quoted excerpt to keep when a turn is re-sent as prior
+# context to a *later* turn. The full excerpt was needed the moment the receipt
+# was made; on every subsequent turn's prompt it's dead weight that gets re-billed
+# as input tokens, so we truncate it. The stored DebateTurn.content is untouched —
+# only the transcript view fed into prompts is compacted.
+_RECEIPT_EXCERPT_KEEP = 120
+
+
+def _compact_receipt(match: re.Match[str]) -> str:
+    title, excerpt = match.group(1), match.group(2)
+    if len(excerpt) <= _RECEIPT_EXCERPT_KEEP:
+        return match.group(0)
+    return f'[RECEIPT: "{title}", "{excerpt[:_RECEIPT_EXCERPT_KEEP]}…"]'
+
+
+def _compact_turns(turns: list[DebateTurn]) -> list[DebateTurn]:
+    """A prompt-only view of the transcript with long receipt excerpts truncated.
+
+    Returns lightweight copies (originals unchanged, so the persisted trace and
+    the replay UI still carry the full receipts). This is the single biggest
+    lever on the debate's quadratic token growth: verbose early turns stop being
+    re-billed in full on every later prompt."""
+    compacted: list[DebateTurn] = []
+    for turn in turns:
+        new_content = _RECEIPT_RE.sub(_compact_receipt, turn.content)
+        if new_content == turn.content:
+            compacted.append(turn)
+        else:
+            compacted.append(turn.model_copy(update={"content": new_content}))
+    return compacted
 
 
 def _first_unspoken(dispatched: set[str]) -> str:
@@ -152,10 +237,23 @@ class LangGraphNegotiationEngine(NegotiationEngine):
     async def run(self, outreach: Outreach, professor: Professor) -> DebateOutcome:
         settings = get_settings()
         started_at = datetime.now(UTC)
+        reset_token_totals()
+
+        candidate = (
+            outreach.extracted_profile.name
+            if outreach.extracted_profile and outreach.extracted_profile.name
+            else outreach.sender_name or outreach.sender_email
+        )
+        logger.info(
+            "▶ Debate starting — candidate '{}' (round cap {})",
+            candidate,
+            self.round_cap,
+        )
 
         # Hybrid grounding: one baseline retrieval shared by Advocate/Auditor;
         # agents can still dig further via the retrieval tool mid-turn.
         baseline_chunks = await self._baseline_chunks(outreach)
+        logger.debug("  retrieved {} baseline corpus chunk(s)", len(baseline_chunks))
         retrieval_tool = self._retriever.as_tool()
 
         profile = outreach.extracted_profile.model_dump() if outreach.extracted_profile else {}
@@ -203,6 +301,22 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             round_cap=self.round_cap,
             started_at=started_at,
         )
+
+        elapsed = (datetime.now(UTC) - started_at).total_seconds()
+        totals = token_totals()
+        debater_turns = sum(1 for t in trace.turns if t.role != AgentRole.ARBITRATOR)
+        logger.info(
+            "✔ Debate complete — {} · {} turns over {} round(s) · {:.1f}s · "
+            "{} LLM calls, {} tok ({}+{})",
+            decision.label.value.upper(),
+            debater_turns,
+            trace.terminated_at_round or 0,
+            elapsed,
+            totals["calls"],
+            totals["input"] + totals["output"],
+            totals["input"],
+            totals["output"],
+        )
         return DebateOutcome(trace=trace, decision=decision)
 
     async def _baseline_chunks(self, outreach: Outreach) -> list[dict]:
@@ -223,12 +337,16 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         base_context: dict[str, Any],
         max_tool_rounds: int,
     ):
-        max_continuations = get_settings().DEBATE_MAX_CONTINUATIONS
-        # A debater can now take multiple turns per round via [CONTINUES]
-        # (bounded by max_continuations), so the hard turn cap needs headroom
-        # beyond "one turn per debater per round" or debates would get cut off
-        # mid-argument well before the round cap is reached.
-        max_turns = self.round_cap * len(_DEBATER_ROLES) * max_continuations
+        settings = get_settings()
+        max_continuations = settings.DEBATE_MAX_CONTINUATIONS
+        # A debater can now take multiple turns per round via [CONTINUES], so the
+        # hard turn cap needs *some* headroom beyond "one turn per debater per
+        # round" — but a modest multiplier, not the full continuation budget, or
+        # the ceiling gets high enough for the debate to spiral before the
+        # Moderator or all-passed check ever ends it.
+        max_turns = (
+            self.round_cap * len(_DEBATER_ROLES) * settings.DEBATE_TURN_CAP_MULTIPLIER
+        )
 
         async def moderator(state: _DebateState) -> dict:
             return await self._moderate(state, base_context, max_turns)
@@ -251,14 +369,22 @@ class LangGraphNegotiationEngine(NegotiationEngine):
                 spoken_this_round.append(role.value)
 
             turn, continues = await self._debater_turn(
-                role, transcript, round_number, retrieval_tool, base_context, max_tool_rounds
+                role,
+                transcript,
+                round_number,
+                retrieval_tool,
+                base_context,
+                max_tool_rounds,
+                is_continuation=is_continuation,
             )
             passed = turn is None
             # Force-stop a runaway continuer once the streak hits the cap,
             # regardless of what the model asked for — a hard safety net so a
             # single voice can never monopolize the debate turn after turn.
             next_count = state["continuation_count"] + 1 if is_continuation else 1
+            capped = continues and next_count >= max_continuations
             continues = continues and next_count < max_continuations
+            _log_turn(role, round_number, turn, passed, continues, capped, next_count)
             return {
                 "turns": [] if passed else [turn],
                 "dispatched": [role.value],
@@ -305,17 +431,20 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         if state["continuing_speaker"] is not None:
             return {"next_speaker": state["continuing_speaker"]}
 
-        # Hard safety nets — never let the model run the debate forever.
+        # Hard safety nets — never let the model run the debate forever. Log
+        # *which* backstop fired so a spiral vs. a clean close is legible.
         if state["turn_count"] >= max_turns:
+            logger.info("🏁 Debate ending — hard turn cap ({} turns) reached", max_turns)
             return {"next_speaker": "end"}
         if all_heard and state["consecutive_passes"] >= len(_DEBATER_ROLES):
+            logger.info("🏁 Debate ending — everyone passed; discussion resolved")
             return {"next_speaker": "end"}
         if not all_heard and state["consecutive_passes"] >= len(_DEBATER_ROLES):
             return {"next_speaker": _first_unspoken(dispatched)}
 
         prompt = render_prompt(
             "moderator.j2",
-            prior_turns=state["turns"],
+            prior_turns=_compact_turns(state["turns"]),
             dispatched=sorted(dispatched),
             all_heard=all_heard,
             **base_context,
@@ -338,6 +467,10 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         # The model may only end after every voice has been heard once.
         if pick == "end" and not all_heard:
             pick = _first_unspoken(dispatched)
+        if pick == "end":
+            logger.info("🏁 Debate ending — Moderator called it (discussion ran its course)")
+        else:
+            logger.debug("🎙 Moderator → {}", pick)
         return {"next_speaker": pick}
 
     async def _debater_turn(
@@ -348,14 +481,23 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         retrieval_tool: BaseTool,
         base_context: dict[str, Any],
         max_tool_rounds: int,
+        *,
+        is_continuation: bool = False,
     ) -> tuple[DebateTurn | None, bool]:
         prompt = render_prompt(
             f"{role.value}.j2",
             round_number=round_number,
-            prior_turns=transcript,
+            prior_turns=_compact_turns(transcript),
             persona=persona_for(role),
             **base_context,
         )
+        if is_continuation:
+            # The model is being re-invoked to *continue its own* previous turn,
+            # but the base prompt frames every call as "a live conversation —
+            # answer challenges, name the person you're addressing." Without
+            # this override it invents an interlocutor to react to (e.g. "Karen's
+            # right…" before Karen has spoken) or addresses itself by name.
+            prompt = _CONTINUATION_DIRECTIVE + prompt
         tools = tools_for_role(role, retrieval_tool)
         tools_by_name = {t.name: t for t in tools}
         model = self._chat_model_factory(role)
@@ -470,6 +612,11 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             content = ""
         if not content:
             content = reason
+        logger.info(
+            '💬 [R1] GATEKEEPER ({}) opens: "{}"',
+            persona_for(AgentRole.GATEKEEPER).name,
+            " ".join(content.split())[:140],
+        )
         return DebateTurn(
             round=1,
             role=AgentRole.GATEKEEPER,
@@ -494,6 +641,7 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             extracted_claims=base_context.get("extracted_claims"),
             recruiting_topics=capacity.recruiting_topics if capacity else [],
         )
+        logger.debug("⚖ Arbitrator ({}) deliberating…", persona_for(AgentRole.ARBITRATOR).name)
         model = self._chat_model_factory(AgentRole.ARBITRATOR).with_structured_output(
             ArbitratorRuling
         )
@@ -502,11 +650,17 @@ class LangGraphNegotiationEngine(NegotiationEngine):
         # can't resolve without a ruling, so retry once before giving up.
         result = await model.ainvoke(prompt)
         if result is None:
+            logger.warning("⚖ Arbitrator returned no ruling — retrying once")
             result = await model.ainvoke(prompt)
         if result is None:
             raise DebateError("Arbitrator returned no structured ruling")
         ruling = (
             result if isinstance(result, ArbitratorRuling) else ArbitratorRuling(**dict(result))
+        )
+        logger.info(
+            '⚖ Arbitrator rules {} — "{}"',
+            ruling.label.value.upper(),
+            " ".join(ruling.rationale.split())[:160],
         )
         closing_turn = DebateTurn(
             round=state["round"],

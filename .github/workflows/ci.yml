@@ -10,7 +10,7 @@ jobs:
     defaults:
       run:
         working-directory: ./backend
-    stratehy:
+    strategy:
       matrix:
         python-version: ["3.12"]
     env:

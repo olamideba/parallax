@@ -1,8 +1,25 @@
 from celery import Celery
+from celery.signals import setup_logging, worker_process_init
 
 from src.config import get_settings
+from src.shared.logging import configure_logging
 
 _settings = get_settings()
+
+
+@setup_logging.connect
+def _skip_celery_logging(**_kwargs: object) -> None:
+    """Stop Celery from installing its own root logging config — we route
+    everything through loguru instead (connecting to this signal at all
+    disables Celery's default handler setup)."""
+    configure_logging()
+
+
+@worker_process_init.connect
+def _init_worker_logging(**_kwargs: object) -> None:
+    """Each forked worker process gets its own loguru sink — signals fire
+    per-process, so configuring here (not just at import) covers the pool."""
+    configure_logging()
 
 celery_app = Celery(
     "parallax",

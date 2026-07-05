@@ -12,7 +12,12 @@ import { Button } from '@/components/Button';
 import { Tag } from '@/components/Tag';
 import { Loader } from '@/components/Loader';
 import { useIsMobile } from '@/lib/useMediaQuery';
-import { ArrowLeft, Check, X, AlertCircle, FileText, Send, Sparkles, AlertTriangle, RefreshCw, Play } from 'lucide-react';
+import { ArrowLeft, Check, X, AlertCircle, FileText, Send, Sparkles, AlertTriangle, RefreshCw, Play, LogOut } from 'lucide-react';
+
+// Poll while the debate hasn't produced a decision yet — the professor is
+// looking at this exact page waiting for triage/debate to land, so a manual
+// refresh shouldn't be required to see it resolve.
+const DEBATE_POLL_MS = 30_000;
 
 // Verdict display treatment — soft-tinted panel, solid accent, Panchang word.
 const VERDICT_META: Record<Decision['label'], { word: string; ink: string; bg: string; accent: string }> = {
@@ -155,6 +160,21 @@ export default function OutreachDetailPage() {
     // not the user object, whose identity churns on every tab refocus.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, id]);
+
+  // Poll for the debate result while none has landed yet. Stops once a
+  // decision exists or the outreach reaches a terminal state (replied/
+  // rejected), so it doesn't keep hitting the backend after there's nothing
+  // left to wait for.
+  useEffect(() => {
+    if (!outreach || outreach.decision) return;
+    if (outreach.status === 'replied' || outreach.status === 'rejected') return;
+
+    const t = setInterval(() => {
+      loadOutreach();
+    }, DEBATE_POLL_MS);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outreach?.decision, outreach?.status, id]);
 
   const handleApprove = async () => {
     if (!outreach) return;
@@ -320,7 +340,7 @@ export default function OutreachDetailPage() {
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-muted)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
             >
-              <X size={16} />
+              <LogOut size={16} />
             </button>
           </div>
         </div>

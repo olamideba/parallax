@@ -40,7 +40,8 @@ async def _run_triage(outreach_id: UUID) -> TriageVerdict | None:
                 pdf_extractor=PyMuPdfTextExtractor(),
                 gatekeeper=QwenGatekeeper(),
             )
-            return await use_case.execute(outreach_id)
+            with logger.contextualize(outreach=str(outreach_id)[:8]):
+                return await use_case.execute(outreach_id)
     finally:
         # See dispose_engine() docstring: the cached engine must not survive
         # past this task's event loop, or the next task in this worker
@@ -91,7 +92,10 @@ async def _run_debate(outreach_id: UUID) -> str | None:
                 trace_repo=SqlDebateTraceRepository(session),
                 engine_factory=lambda professor: _build_engine(professor, session),
             )
-            trace_id = await use_case.execute(outreach_id)
+            # Tag every log line in this debate with a short outreach id so
+            # parallel debates in the same worker stay distinguishable.
+            with logger.contextualize(outreach=str(outreach_id)[:8]):
+                trace_id = await use_case.execute(outreach_id)
             return str(trace_id) if trace_id else None
     finally:
         # See dispose_engine() docstring.

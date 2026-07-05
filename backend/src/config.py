@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     QWEN_MODEL_GATEKEEPER: str = Field(default="qwen-turbo")
     QWEN_MODEL_DEBATE: str = Field(default="qwen3.5-flash")
     QWEN_MODEL_ARBITRATOR: str = Field(default="qwen3.6-flash")
+    # Qwen "thinking" mode is ON by default and generates a large hidden
+    # reasoning stream before the answer — thousands of tokens and 1-3 minutes
+    # per debate turn, and it also breaks structured output (the Arbitrator's
+    # ruling parses to None). We turn it off for the debate: turns are
+    # conversational, not chain-of-thought, and max_tokens can't bind while it's
+    # on. Flip to True only if a specific role needs deliberate reasoning.
+    QWEN_DEBATE_THINKING: bool = Field(default=False)
     # DashScope OpenAI-compatible endpoint + embeddings.
     DASHSCOPE_BASE_URL: str = Field(
         default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
@@ -50,6 +57,11 @@ class Settings(BaseSettings):
     # is now only the opt-in switch for wiring the reranker into retrieval.
     DASHSCOPE_WORKSPACE_ID: str = Field(default="")
     DASHSCOPE_RERANK_MODEL: str = Field(default="qwen3-rerank")
+    # The reranker has a single, scarce free-quota model, so we conserve calls:
+    # short queries (fewer than this many words) skip rerank and use raw vector
+    # similarity, which is already good enough for a tight lookup. Set to 0 to
+    # rerank every allowed query.
+    RERANK_MIN_QUERY_WORDS: int = Field(default=6)
 
     # Debate
     DEBATE_ROUND_CAP: int = Field(default=3)
@@ -58,9 +70,22 @@ class Settings(BaseSettings):
     # How many baseline corpus chunks are pre-fetched for the debaters.
     DEBATE_BASELINE_CHUNKS: int = Field(default=4)
     # Max consecutive [CONTINUES] turns one debater gets before being cut off
-    # (e.g. an Auditor working through several claims one at a time). A hard
-    # safety net independent of the overall turn cap below.
-    DEBATE_MAX_CONTINUATIONS: int = Field(default=4)
+    # (e.g. an Auditor working through a couple of claims one at a time). Kept
+    # low: each continuation is another LLM round-trip, so a high cap is what
+    # turns a debate into a spiral. A hard safety net independent of the
+    # overall turn cap below.
+    DEBATE_MAX_CONTINUATIONS: int = Field(default=2)
+    # Headroom multiplier on the hard turn cap to leave room for continuations
+    # and real back-and-forth beyond "one turn per debater per round". The cap
+    # is round_cap * debaters * this — keep modest so the debate can't run away.
+    DEBATE_TURN_CAP_MULTIPLIER: int = Field(default=2)
+    # Hard per-generation output ceiling for a debater turn. One point per turn
+    # should never need more than this; a low cap stops a single turn running to
+    # thousands of tokens (which then gets re-billed on every later prompt).
+    DEBATE_MAX_TURN_TOKENS: int = Field(default=700)
+    # The Arbitrator's final ruling carries a scorecard + rationale + drafted
+    # reply, so it gets more room than a single debate turn.
+    DEBATE_MAX_ARBITER_TOKENS: int = Field(default=1500)
 
     # Cloudflare R2
     R2_ACCOUNT_ID: str = Field(default="")

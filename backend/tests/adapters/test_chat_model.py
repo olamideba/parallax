@@ -23,6 +23,24 @@ def test_get_chat_model_builds_qwen_client_pinned_to_dashscope() -> None:
     assert model.model_name == settings.QWEN_MODEL_DEBATE
 
 
+def test_debate_models_disable_thinking_and_cap_output() -> None:
+    """Thinking mode on a debate model emits a huge hidden reasoning stream that
+    blows past max_tokens, stalls turns for minutes, and breaks structured
+    output — lock it off and keep the per-turn output cap bound."""
+    settings = get_settings()
+
+    debater = get_chat_model(AgentRole.ADVOCATE)
+    assert debater.enable_thinking is False
+    # _is_thinking_model() is what actually gates the thinking payload + the
+    # non-streaming behavior; it was silently True before we set the flag.
+    assert debater._is_thinking_model() is False
+    assert debater.max_tokens == settings.DEBATE_MAX_TURN_TOKENS
+
+    arbiter = get_chat_model(AgentRole.ARBITRATOR)
+    assert arbiter.enable_thinking is False
+    assert arbiter.max_tokens == settings.DEBATE_MAX_ARBITER_TOKENS
+
+
 def test_no_direct_chatqwen_or_openai_endpoint_in_src() -> None:
     """Prove the factory is the only place that builds a Qwen chat client and
     that no non-Qwen endpoint is hardcoded anywhere in src/."""
