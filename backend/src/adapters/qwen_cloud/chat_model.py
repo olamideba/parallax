@@ -45,16 +45,26 @@ def get_chat_model(role: AgentRole | None = None) -> ChatQwen:
         if role == AgentRole.ARBITRATOR
         else settings.DEBATE_MAX_TURN_TOKENS
     )
+    # Granular thinking-mode control: per-role opt-in for reasoning overhead.
+    # "" (default) = off everywhere; "arbitrator" = on for Arbitrator only;
+    # "all" = on everywhere.
+    thinking_enabled = (
+        settings.QWEN_DEBATE_THINKING == "all"
+        or (
+            role == AgentRole.ARBITRATOR
+            and settings.QWEN_DEBATE_THINKING == "arbitrator"
+        )
+    )
     return ChatQwen(
         model=model,
         base_url=settings.DASHSCOPE_BASE_URL,
         api_key=SecretStr(settings.DASHSCOPE_API_KEY),
         timeout=settings.DASHSCOPE_TIMEOUT,
         max_tokens=max_tokens,
-        # Explicitly off by default: Qwen thinking mode otherwise emits a huge
-        # hidden reasoning stream per turn (thousands of tokens, minutes of
-        # latency) that also blows past max_tokens and breaks structured output.
-        enable_thinking=settings.QWEN_DEBATE_THINKING,
+        # Thinking mode adds 1-3min latency per call and thousands of tokens.
+        # Granular: opt-in per-role for A/B testing (does Arbitrator reasoning
+        # improve verdict quality?). Default off (fastest, leanest).
+        enable_thinking=thinking_enabled,
         # Per-call latency + token-usage logging, tagged with the agent role.
         callbacks=[TokenUsageCallback(role.value if role else "debate", model)],
     )

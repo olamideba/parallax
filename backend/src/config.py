@@ -37,13 +37,15 @@ class Settings(BaseSettings):
     QWEN_MODEL_GATEKEEPER: str = Field(default="qwen-turbo")
     QWEN_MODEL_DEBATE: str = Field(default="qwen3.5-flash")
     QWEN_MODEL_ARBITRATOR: str = Field(default="qwen3.6-flash")
-    # Qwen "thinking" mode is ON by default and generates a large hidden
-    # reasoning stream before the answer — thousands of tokens and 1-3 minutes
-    # per debate turn, and it also breaks structured output (the Arbitrator's
-    # ruling parses to None). We turn it off for the debate: turns are
-    # conversational, not chain-of-thought, and max_tokens can't bind while it's
-    # on. Flip to True only if a specific role needs deliberate reasoning.
-    QWEN_DEBATE_THINKING: bool = Field(default=False)
+    # Qwen "thinking" mode generates a large hidden reasoning stream — thousands
+    # of tokens and 1-3 minutes per call. We turn it off by default: debate turns
+    # are conversational (not chain-of-thought), and max_tokens can't bind while
+    # thinking is on. Per-role granularity lets you A/B test whether the
+    # Arbitrator benefits from thinking (weighing evidence + scoring) without
+    # bloating the whole debate. Set to "arbitrator" to enable thinking only for
+    # the Arbitrator's final verdict; set to "all" to enable everywhere; "" (empty)
+    # disables everywhere (default, fastest).
+    QWEN_DEBATE_THINKING: str = Field(default="")
     # DashScope OpenAI-compatible endpoint + embeddings.
     DASHSCOPE_BASE_URL: str = Field(
         default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
