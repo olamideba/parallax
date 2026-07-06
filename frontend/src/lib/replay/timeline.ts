@@ -20,6 +20,12 @@ const PER_CHAR_MS = 18;
 const MAX_TURN_MS = 8500;
 
 export function turnDuration(turn: DebateTurn): number {
+  // Real synthesized audio wins — the beat is exactly as long as the speech.
+  // Absent audio (synthesis pending/failed, or older traces), fall back to the
+  // character-count heuristic so the replay still plays as a silent beat.
+  if (turn.audio_duration_ms && turn.audio_duration_ms > 0) {
+    return turn.audio_duration_ms;
+  }
   return Math.min(MAX_TURN_MS, BASE_MS + turn.content.length * PER_CHAR_MS);
 }
 

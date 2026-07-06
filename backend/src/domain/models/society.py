@@ -55,6 +55,14 @@ class DebateTurn(BaseModel):
     actions: list[AgentAction] = Field(default_factory=list)
     references_turn_ids: list[int] = Field(default_factory=list)
     created_at: datetime
+    # Filled in after the debate by the audio-synthesis step, never by the
+    # debate itself. `content` stays the full evidentiary record; `spoken_line`
+    # is a short conversational rendering used only for TTS. `audio_duration_ms`
+    # is the real playback length that drives the replay clock (the frontend
+    # falls back to a character-count heuristic when it is absent).
+    spoken_line: str | None = None
+    audio_key: str | None = None
+    audio_duration_ms: int | None = None
 
 
 class DebateTrace(BaseModel):
