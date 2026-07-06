@@ -23,6 +23,42 @@ def test_get_chat_model_builds_qwen_client_pinned_to_dashscope() -> None:
     assert model.model_name == settings.QWEN_MODEL_DEBATE
 
 
+def test_debate_models_disable_thinking_by_default() -> None:
+    """Thinking mode emits a huge hidden reasoning stream that blows past
+    max_tokens and stalls turns for minutes. Default is off everywhere; granular
+    per-role control via QWEN_DEBATE_THINKING lets you opt-in for the Arbitrator
+    only (if reasoning improves verdict quality) without bloating the whole debate."""
+    settings = get_settings()
+
+    debater = get_chat_model(AgentRole.ADVOCATE)
+    assert debater.enable_thinking is False
+    assert debater._is_thinking_model() is False
+    assert debater.max_tokens == settings.DEBATE_MAX_TURN_TOKENS
+
+    arbiter = get_chat_model(AgentRole.ARBITRATOR)
+    assert arbiter.enable_thinking is False  # off by default
+    assert arbiter.max_tokens == settings.DEBATE_MAX_ARBITER_TOKENS
+
+
+def test_thinking_mode_per_role_config(monkeypatch) -> None:  # noqa: ANN001
+    """Verify the granular thinking-mode switch works: "" = off everywhere,
+    "arbitrator" = on for Arbitrator only, "all" = on everywhere."""
+    # "" (default) = off everywhere
+    monkeypatch.setattr(get_settings(), "QWEN_DEBATE_THINKING", "")
+    assert get_chat_model(AgentRole.ARBITRATOR).enable_thinking is False
+    assert get_chat_model(AgentRole.ADVOCATE).enable_thinking is False
+
+    # "arbitrator" = on for Arbitrator only
+    monkeypatch.setattr(get_settings(), "QWEN_DEBATE_THINKING", "arbitrator")
+    assert get_chat_model(AgentRole.ARBITRATOR).enable_thinking is True
+    assert get_chat_model(AgentRole.ADVOCATE).enable_thinking is False
+
+    # "all" = on everywhere
+    monkeypatch.setattr(get_settings(), "QWEN_DEBATE_THINKING", "all")
+    assert get_chat_model(AgentRole.ARBITRATOR).enable_thinking is True
+    assert get_chat_model(AgentRole.ADVOCATE).enable_thinking is True
+
+
 def test_no_direct_chatqwen_or_openai_endpoint_in_src() -> None:
     """Prove the factory is the only place that builds a Qwen chat client and
     that no non-Qwen endpoint is hardcoded anywhere in src/."""

@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     QWEN_MODEL_GATEKEEPER: str = Field(default="qwen-turbo")
     QWEN_MODEL_DEBATE: str = Field(default="qwen3.5-flash")
     QWEN_MODEL_ARBITRATOR: str = Field(default="qwen3.6-flash")
+    # Qwen "thinking" mode generates a large hidden reasoning stream — thousands
+    # of tokens and 1-3 minutes per call. We turn it off by default: debate turns
+    # are conversational (not chain-of-thought), and max_tokens can't bind while
+    # thinking is on. Per-role granularity lets you A/B test whether the
+    # Arbitrator benefits from thinking (weighing evidence + scoring) without
+    # bloating the whole debate. Set to "arbitrator" to enable thinking only for
+    # the Arbitrator's final verdict; set to "all" to enable everywhere; "" (empty)
+    # disables everywhere (default, fastest).
+    QWEN_DEBATE_THINKING: str = Field(default="")
     # DashScope OpenAI-compatible endpoint + embeddings.
     DASHSCOPE_BASE_URL: str = Field(
         default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
@@ -50,6 +59,21 @@ class Settings(BaseSettings):
     # is now only the opt-in switch for wiring the reranker into retrieval.
     DASHSCOPE_WORKSPACE_ID: str = Field(default="")
     DASHSCOPE_RERANK_MODEL: str = Field(default="qwen3-rerank")
+    # The reranker has a single, scarce free-quota model, so we conserve calls:
+    # short queries (fewer than this many words) skip rerank and use raw vector
+    # similarity, which is already good enough for a tight lookup. Set to 0 to
+    # rerank every allowed query.
+    RERANK_MIN_QUERY_WORDS: int = Field(default=6)
+
+    # Text-to-speech (DashScope Qwen3-TTS) for the debate replay. Rides on the
+    # same DASHSCOPE_API_KEY via dashscope.MultiModalConversation.call (plain
+    # HTTP, not the WebSocket-only CosyVoice tts_v2 client — that's a different
+    # model family and rejects these model ids with ModelNotFound).
+    DASHSCOPE_TTS_ENABLED: bool = Field(default=True)
+    DASHSCOPE_TTS_MODEL: str = Field(default="qwen3-tts-flash")
+    DASHSCOPE_TTS_TIMEOUT: float = Field(default=60.0)
+    # Words to keep a spoken line short enough to sound like speech, not prose.
+    DEBATE_SPOKEN_LINE_MAX_WORDS: int = Field(default=55)
 
     # Debate
     DEBATE_ROUND_CAP: int = Field(default=3)
@@ -58,9 +82,22 @@ class Settings(BaseSettings):
     # How many baseline corpus chunks are pre-fetched for the debaters.
     DEBATE_BASELINE_CHUNKS: int = Field(default=4)
     # Max consecutive [CONTINUES] turns one debater gets before being cut off
-    # (e.g. an Auditor working through several claims one at a time). A hard
-    # safety net independent of the overall turn cap below.
-    DEBATE_MAX_CONTINUATIONS: int = Field(default=4)
+    # (e.g. an Auditor working through a couple of claims one at a time). Kept
+    # low: each continuation is another LLM round-trip, so a high cap is what
+    # turns a debate into a spiral. A hard safety net independent of the
+    # overall turn cap below.
+    DEBATE_MAX_CONTINUATIONS: int = Field(default=2)
+    # Headroom multiplier on the hard turn cap to leave room for continuations
+    # and real back-and-forth beyond "one turn per debater per round". The cap
+    # is round_cap * debaters * this — keep modest so the debate can't run away.
+    DEBATE_TURN_CAP_MULTIPLIER: int = Field(default=2)
+    # Hard per-generation output ceiling for a debater turn. One point per turn
+    # should never need more than this; a low cap stops a single turn running to
+    # thousands of tokens (which then gets re-billed on every later prompt).
+    DEBATE_MAX_TURN_TOKENS: int = Field(default=700)
+    # The Arbitrator's final ruling carries a scorecard + rationale + drafted
+    # reply, so it gets more room than a single debate turn.
+    DEBATE_MAX_ARBITER_TOKENS: int = Field(default=1500)
 
     # Cloudflare R2
     R2_ACCOUNT_ID: str = Field(default="")

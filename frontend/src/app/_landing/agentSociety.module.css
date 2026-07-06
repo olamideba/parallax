@@ -1,0 +1,139 @@
+/* The landing hero's signature visual: the five pixel-art debate agents in a
+   pentagon around one inbound email, wired by dashed debate-traffic lines.
+   Flat fills only — no gradients. The dashed-line language here is reused by
+   the How-it-Works connectors so both sections read as one system. */
+
+.stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Layers shift a few px against each other on scroll (parallax). The offsets
+   are driven by a CSS var set from a scroll listener; reduced-motion and
+   mobile leave --p at 0. */
+.linesLayer {
+  position: absolute;
+  inset: 0;
+  transform: translateY(calc(var(--p, 0px) * 0.5));
+  will-change: transform;
+}
+
+.nodesLayer {
+  position: absolute;
+  inset: 0;
+  transform: translateY(calc(var(--p, 0px) * -0.35));
+  will-change: transform;
+}
+
+.node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.inView .node {
+  animation: dropIn 420ms cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards;
+}
+
+/* Agent sprite: the same pixel-art characters as the debate replay. Gentle
+   staggered float so the society feels alive without shouting. */
+.disc {
+  display: block;
+  animation: float 4.2s ease-in-out infinite;
+}
+
+.centerNode {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Expanding ring pulse behind the email — the debate radiating outward. */
+.pulseRing {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--periwinkle-400);
+  animation: ringPulse 3s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 3 7;
+  animation: lineFlow 2.8s linear infinite, linePulse 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes dropIn {
+  0% {
+    transform: translate(-50%, calc(-50% - 14px));
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+  }
+}
+
+@keyframes ringPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+@keyframes lineFlow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+@keyframes linePulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .disc,
+  .inView .node,
+  .pulseRing,
+  .line {
+    animation: none !important;
+  }
+  .pulseRing {
+    opacity: 0;
+  }
+  .line {
+    stroke-dasharray: none;
+    opacity: 0.35;
+  }
+  .linesLayer,
+  .nodesLayer {
+    transform: none !important;
+  }
+}

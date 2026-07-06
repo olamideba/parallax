@@ -59,6 +59,14 @@ export interface DebateTurn {
   actions: AgentAction[];
   references_turn_ids: number[];   // indices of earlier turns this one builds on
   created_at: string;              // ISO timestamp
+  // Filled in after the debate by the audio-synthesis step. `content` stays the
+  // full evidentiary text; `spoken_line` is its short spoken rendering, and
+  // `audio_duration_ms` is the real playback length that drives the replay clock
+  // (absent/null → the replay falls back to a character-count heuristic beat).
+  // Optional so fixtures/older traces without audio still satisfy the type.
+  spoken_line?: string | null;
+  audio_key?: string | null;
+  audio_duration_ms?: number | null;
 }
 
 export interface DebateTrace {
@@ -280,6 +288,23 @@ export const api = {
   },
 
   getDebateTrace: (id: string) => apiFetch<DebateTrace>(`/reviews/${id}/debate`),
+
+  // Fetches one debate turn's synthesized speech (auth header required) and
+  // returns a blob URL for an <audio> element, or null when the turn has no
+  // audio (synthesis pending/failed) so the replay can fall back to a silent
+  // heuristic beat. Returns raw bytes, not the JSON envelope.
+  getTurnAudioUrl: async (id: string, index: number): Promise<string | null> => {
+    const token = await getAuthToken();
+    const res = await fetch(
+      `${API_BASE}/api/v1/reviews/${id}/debate/turns/${index}/audio`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      throw new Error(await extractErrorDetail(res, `Failed to load audio (${res.status})`));
+    }
+    return URL.createObjectURL(await res.blob());
+  },
   
   approveDecision: (id: string) => apiFetch<Outreach>(`/reviews/${id}/approve`, {
     method: 'POST',

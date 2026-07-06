@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
@@ -37,20 +38,27 @@ export default function LoginPage() {
 
       if (authError) {
         setError(authError.message);
-      } else if (data?.user) {
-        // Successful login, check onboarding state
-        // In a real flow, we fetch GET /api/v1/professors/me.
-        // For now, check localStorage or mock check.
-        const onboardingCompleted = localStorage.getItem(`onboarding_completed_${data.user.id}`);
-        if (onboardingCompleted === 'true') {
-          router.push('/inbox'); // Main application inbox page
-        } else {
+        setLoading(false);
+        return;
+      }
+      if (data?.user) {
+        // Onboarding completion is a backend fact (has the professor actually
+        // set up lab capacity?), not a per-browser localStorage flag — that
+        // flag is unset on any new device/browser/incognito session, which
+        // was sending already-onboarded professors back into the wizard on
+        // every login. Treat "capacity or topics declared" as done.
+        try {
+          const prof = await api.getProfessorProfile();
+          const hasOnboarded = prof.open_slots > 0 || prof.recruiting_topics.length > 0;
+          router.push(hasOnboarded ? '/inbox' : '/onboarding');
+        } catch {
+          // Profile fetch failed — fall back to onboarding rather than
+          // stranding the user on the login page.
           router.push('/onboarding');
         }
       }
     } catch (err: any) {
       setError('An unexpected error occurred. Please try again.');
-    } finally {
       setLoading(false);
     }
   };

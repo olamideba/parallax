@@ -61,6 +61,7 @@ class TriageOutreachUseCase:
             logger.warning("Triage: professor {} not found", outreach.professor_id)
             return None
 
+        logger.info("🛂 Gatekeeper triaging outreach from {}", outreach.sender_email)
         cv_text = await self._extract_cv_text(outreach)
         assessment = await self._gatekeeper.assess(
             sender_email=outreach.sender_email,
@@ -90,6 +91,13 @@ class TriageOutreachUseCase:
             outreach.status = OutreachStatus.AWAITING_REVIEW
 
         await self._outreach_repo.save(outreach)
+        verb = "promoted to debate" if assessment.verdict == TriageVerdict.PROMOTE else "rejected"
+        logger.info(
+            "🛂 Gatekeeper {} ({} claim(s)) — {}",
+            verb,
+            len(assessment.claim_texts),
+            " ".join((assessment.reason or "").split())[:120],
+        )
         return assessment.verdict
 
     async def _extract_cv_text(self, outreach: Outreach) -> str | None:

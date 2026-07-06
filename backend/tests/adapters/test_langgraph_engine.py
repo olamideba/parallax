@@ -8,8 +8,10 @@ from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 
 from src.adapters.orchestration.langgraph_engine import (
+    _RECEIPT_EXCERPT_KEEP,
     ArbitratorRuling,
     LangGraphNegotiationEngine,
+    _compact_turns,
     _ModeratorChoice,
 )
 from src.domain.models.outreach import (
@@ -19,7 +21,7 @@ from src.domain.models.outreach import (
     OutreachStatus,
 )
 from src.domain.models.professor import Capacity, Professor
-from src.domain.models.society import ActionKind, AgentRole
+from src.domain.models.society import ActionKind, AgentRole, DebateTurn, Receipt
 
 # --- Fakes ---------------------------------------------------------------
 
@@ -335,7 +337,13 @@ async def test_no_gatekeeper_opening_when_reason_absent() -> None:
 
 
 @pytest.mark.asyncio
-async def test_continues_marker_gives_same_speaker_the_next_turn() -> None:
+async def test_continues_marker_gives_same_speaker_the_next_turn(monkeypatch) -> None:  # noqa: ANN001
+    # Pin the continuation cap high enough that this test exercises the
+    # *mechanism* (floor handed back, marker stripped, same round) rather than
+    # the cap value — the cap itself is covered by the test below.
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "DEBATE_MAX_CONTINUATIONS", 5)
     # The Moderator only ever picks "auditor" once — the second and third
     # Auditor turns happen purely because [CONTINUES] force-routes the floor
     # back, with no Moderator involvement (and no extra scripted pick needed).
@@ -407,3 +415,80 @@ async def test_arbitrator_closing_turn_appended_with_rationale() -> None:
     assert closing.content == "Strong fit per [REF:0]."
     assert closing.references_turn_ids == [0]
     assert outcome.decision.label == "decline"
+
+
+# --- Token / transcript compaction ---------------------------------------
+
+
+def _turn(content: str) -> DebateTurn:
+    return DebateTurn(
+        round=1, role=AgentRole.ADVOCATE, content=content, created_at=datetime.now(UTC)
+    )
+
+
+def test_compact_turns_truncates_long_receipt_excerpts() -> None:
+    long_excerpt = "x" * 400
+    turn = _turn(f'Fit is real [RECEIPT: "Attention Paper", "{long_excerpt}"].')
+    turn.receipts = [Receipt(source_title="Attention Paper", chunk_text=long_excerpt)]
+
+    (compacted,) = _compact_turns([turn])
+
+    # The re-sent view is shortened...
+    assert long_excerpt not in compacted.content
+    assert "…" in compacted.content
+    assert len(compacted.content) < len(turn.content)
+    # ...but the original turn (persisted + shown in replay) is untouched, and
+    # its structured receipts are never dropped.
+    assert long_excerpt in turn.content
+    assert turn.receipts[0].chunk_text == long_excerpt
+
+
+def test_compact_turns_leaves_short_receipts_and_plain_turns_untouched() -> None:
+    short = _turn('Solid [RECEIPT: "Paper", "brief quote"].')
+    plain = _turn("Just an argument, no receipt.")
+
+    result = _compact_turns([short, plain])
+
+    assert result[0].content == short.content  # under the keep threshold
+    assert result[1] is plain  # unchanged object, no needless copy
+
+
+def test_receipt_keep_threshold_is_the_truncation_boundary() -> None:
+    at_limit = "a" * _RECEIPT_EXCERPT_KEEP
+    over_limit = "b" * (_RECEIPT_EXCERPT_KEEP + 1)
+    kept = _turn(f'x [RECEIPT: "T", "{at_limit}"].')
+    cut = _turn(f'x [RECEIPT: "T", "{over_limit}"].')
+
+    assert _compact_turns([kept])[0].content == kept.content
+    assert _compact_turns([cut])[0].content != cut.content
+
+
+@pytest.mark.asyncio
+async def test_continuation_injects_first_person_directive(monkeypatch) -> None:  # noqa: ANN001
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "DEBATE_MAX_CONTINUATIONS", 5)
+
+    # Capture every prompt the Auditor sees so we can assert the continuation
+    # call is framed differently from the first call.
+    seen: list[str] = []
+
+    class _CapturingAuditor(FakeChatModel):
+        async def ainvoke(self, messages):  # noqa: ANN001
+            seen.append(str(messages[0].content))
+            return await super().ainvoke(messages)
+
+    models = {
+        AgentRole.GATEKEEPER: _moderator("auditor", "advocate", "assessor", "end"),
+        AgentRole.AUDITOR: _CapturingAuditor(["Claim 1: ok. [CONTINUES]", "Claim 2: no.", "PASS"]),
+        AgentRole.ADVOCATE: FakeChatModel(["case.", "PASS"]),
+        AgentRole.ASSESSOR: FakeChatModel(["fine.", "PASS"]),
+        AgentRole.ARBITRATOR: FakeChatModel(structured=_ruling()),
+    }
+    outreach = _outreach()
+    await _engine(models).run(outreach, _professor(outreach.professor_id))
+
+    # First Auditor turn: no continuation framing. Second (the [CONTINUES]
+    # pickup): carries the first-person "continuing your own statement" directive.
+    assert "CONTINUING YOUR OWN" not in seen[0]
+    assert "CONTINUING YOUR OWN" in seen[1]
