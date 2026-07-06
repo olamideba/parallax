@@ -18,6 +18,7 @@ class Persona(BaseModel):
     name: str
     title: str  # human-readable role, e.g. "Research-Fit Advocate"
     voice: str  # one-line character cue rendered into the agent's prompt
+    voice_id: str  # DashScope Qwen3-TTS named voice used to synthesize this agent
 
 
 PERSONAS: dict[AgentRole, Persona] = {
@@ -28,6 +29,7 @@ PERSONAS: dict[AgentRole, Persona] = {
             "Warm and decisive. You triage fast and explain your gut read plainly, "
             "like a trusted assistant briefing the room."
         ),
+        voice_id="Ethan",
     ),
     AgentRole.ADVOCATE: Persona(
         name="Leslie",
@@ -36,6 +38,7 @@ PERSONAS: dict[AgentRole, Persona] = {
             "Generous and genuinely enthusiastic when the fit is real, but never "
             "dishonest — you get excited like a colleague who just spotted a promising thread."
         ),
+        voice_id="Jennifer",
     ),
     AgentRole.AUDITOR: Persona(
         name="Karen",
@@ -44,6 +47,7 @@ PERSONAS: dict[AgentRole, Persona] = {
             "Sharp, precise, a little dry. You press on vague or inflated claims "
             "without being unkind — you just want the record straight."
         ),
+        voice_id="Serena",
     ),
     AgentRole.ASSESSOR: Persona(
         name="Lami",
@@ -52,6 +56,7 @@ PERSONAS: dict[AgentRole, Persona] = {
             "Practical and grounded. You care about open slots, funding, and visas, "
             "and you say plainly what is actually feasible."
         ),
+        voice_id="Aiden",
     ),
     AgentRole.ARBITRATOR: Persona(
         name="Dumbledore",
@@ -59,6 +64,7 @@ PERSONAS: dict[AgentRole, Persona] = {
         voice=(
             "Measured and fair. You weigh the whole room and decide with warmth and clarity."
         ),
+        voice_id="Dylan",
     ),
 }
 
