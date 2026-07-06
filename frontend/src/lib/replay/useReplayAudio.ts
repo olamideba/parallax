@@ -5,16 +5,32 @@ import { Beat } from './timeline';
 // The replay's clock stays authoritative: a single `playheadMs` drives every
 // derived thing (active speaker, log, ledger) and every transport action
 // (scrub / step / speed / seek) writes it directly. Audio is *slaved* to that
-// clock rather than driving it — one <audio> element per active turn is kept in
-// sync with the playhead (play/pause, currentTime, playbackRate). A turn with
-// no audio simply plays as a silent beat; the clock keeps ticking regardless.
+// clock rather than driving it. A turn with no audio simply plays as a silent
+// beat; the clock keeps ticking regardless. This preserves the seekable-clock
+// design — we don't introduce a second source of truth that could drift.
 //
-// This preserves the seekable-clock design: we don't introduce a second source
-// of truth that could drift from the playhead.
+// Smoothness comes from per-turn buffering, not a single reused element:
+//  - ONE <audio> element per turn, its `src` set once and never swapped, so the
+//    browser buffers+decodes each clip independently and keeps it ready. Reusing
+//    one element and re-`src`-ing it every turn (the old design) threw away the
+//    decoded buffer each time and forced a fresh load/decode — that's the audible
+//    break between turns.
+//  - A rolling PRELOAD WINDOW (current + next 2) fetches and warms clips ahead of
+//    the playhead so a turn is already decoded by the time it becomes active,
+//    instead of racing the network at turn start.
 
+// How many turns ahead of the active one to keep warmed.
+const PRELOAD_AHEAD = 2;
+// Keep a little slack behind too, so a small step-back doesn't reload.
+const KEEP_BEHIND = 1;
 // Re-seek the audio only when it has drifted past this from where the clock
 // says it should be — avoids fighting normal playback with constant seeks.
 const DRIFT_TOLERANCE_MS = 250;
+
+interface WarmClip {
+  url: string;
+  audio: HTMLAudioElement;
+}
 
 interface UseReplayAudioArgs {
   reviewId: string;
@@ -38,93 +54,115 @@ export function useReplayAudio({
   speed,
   enabled,
 }: UseReplayAudioArgs): void {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  // Per-turn blob URLs (index → object URL), null once fetched-but-absent.
-  const urlsRef = useRef<Map<number, string | null>>(new Map());
-  // The turn index currently loaded into the <audio> element.
-  const loadedIdxRef = useRef<number>(-1);
-
-  // Create (and tear down) the single <audio> element off-render.
-  useEffect(() => {
-    const audio = new Audio();
-    audio.preload = 'auto';
-    audioRef.current = audio;
-    return () => {
-      audio.pause();
-      audioRef.current = null;
-    };
-  }, []);
+  // index -> warmed clip (blob url + its own <audio> element). Absence means
+  // "not warmed"; a value with url:'' means "fetched but this turn has no audio".
+  const clipsRef = useRef<Map<number, WarmClip>>(new Map());
+  // Turn indices whose fetch is in flight, so the window effect doesn't refetch.
+  const inFlightRef = useRef<Set<number>>(new Set());
 
   // Which turns actually have audio to fetch.
   const audioTurns = useMemo(
-    () => turns.map((t, i) => ({ i, has: !!t.audio_key })),
+    () => turns.map((t) => !!t.audio_key),
     [turns],
   );
 
-  // Prefetch the active turn (and the next one) lazily as the playhead moves.
+  // Warm a rolling window [active - KEEP_BEHIND, active + PRELOAD_AHEAD]:
+  // fetch each clip's blob and create its own preloaded <audio>. Release clips
+  // that fall outside the window so memory stays bounded.
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    const fetchFor = async (i: number) => {
+
+    const lo = Math.max(0, activeIdx - KEEP_BEHIND);
+    const hi = Math.min(audioTurns.length - 1, activeIdx + PRELOAD_AHEAD);
+
+    // Evict anything outside the window.
+    for (const [i, clip] of clipsRef.current) {
+      if (i < lo || i > hi) {
+        clip.audio.pause();
+        if (clip.url) URL.revokeObjectURL(clip.url);
+        clipsRef.current.delete(i);
+      }
+    }
+
+    const warm = async (i: number) => {
       if (i < 0 || i >= audioTurns.length) return;
-      if (!audioTurns[i].has) return;
-      if (urlsRef.current.has(i)) return;
-      urlsRef.current.set(i, null); // mark in-flight so we don't refetch
+      if (!audioTurns[i]) return; // this turn has no audio at all
+      if (clipsRef.current.has(i) || inFlightRef.current.has(i)) return;
+      inFlightRef.current.add(i);
       try {
         const url = await api.getTurnAudioUrl(reviewId, i);
-        if (!cancelled) urlsRef.current.set(i, url);
+        if (cancelled || url === null) return;
+        // Blob is fully local now; give it a dedicated element and let the
+        // browser decode it ahead of time so playback starts instantly.
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.src = url;
+        audio.load();
+        clipsRef.current.set(i, { url, audio });
       } catch {
-        if (!cancelled) urlsRef.current.set(i, null);
+        // leave unwarmed; the turn will play as a silent beat
+      } finally {
+        inFlightRef.current.delete(i);
       }
     };
-    void fetchFor(activeIdx);
-    void fetchFor(activeIdx + 1);
+
+    // Warm the active turn first, then look ahead.
+    void warm(activeIdx);
+    for (let i = activeIdx + 1; i <= hi; i++) void warm(i);
+
     return () => {
       cancelled = true;
     };
   }, [enabled, reviewId, activeIdx, audioTurns]);
 
-  // Revoke all blob URLs on unmount / trace change.
+  // Release every clip on unmount / trace change.
   useEffect(() => {
-    const urls = urlsRef.current;
+    const clips = clipsRef.current;
+    const inFlight = inFlightRef.current;
     return () => {
-      for (const url of urls.values()) if (url) URL.revokeObjectURL(url);
-      urls.clear();
-      loadedIdxRef.current = -1;
+      for (const clip of clips.values()) {
+        clip.audio.pause();
+        if (clip.url) URL.revokeObjectURL(clip.url);
+      }
+      clips.clear();
+      inFlight.clear();
     };
   }, [reviewId]);
 
-  // Sync the <audio> to the playhead on every relevant change.
+  // Drive ONLY the active turn's element; keep every other clip paused. No
+  // element is ever re-`src`-ed, so each keeps its decoded buffer.
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !enabled) return;
+    if (!enabled) return;
 
+    const active = clipsRef.current.get(activeIdx);
     const beat = activeIdx >= 0 ? beats[activeIdx] : null;
-    const url = urlsRef.current.get(activeIdx) ?? null;
 
-    // No active audio-backed turn (before first beat, or synthesis absent):
-    // ensure nothing is playing and let the clock run silently.
-    if (!beat || !url) {
-      if (!audio.paused) audio.pause();
-      return;
+    // Pause any non-active clip that might still be playing (e.g. right after a
+    // scrub/step changed the active turn).
+    for (const [i, clip] of clipsRef.current) {
+      if (i !== activeIdx && !clip.audio.paused) clip.audio.pause();
     }
 
-    // Load the right clip into the element when the active turn changes.
-    if (loadedIdxRef.current !== activeIdx || audio.src !== url) {
-      audio.src = url;
-      loadedIdxRef.current = activeIdx;
-    }
+    if (!active || !beat) return;
 
+    const audio = active.audio;
     audio.playbackRate = speed;
 
-    // Where the clock says we are *within* this turn's audio.
+    // Where the clock says we are within this turn's audio.
     const targetSec = Math.max(0, (playheadMs - beat.startMs) / 1000);
-    if (Number.isFinite(audio.currentTime) &&
-        Math.abs(audio.currentTime - targetSec) * 1000 > DRIFT_TOLERANCE_MS) {
+    // Only seek a clip that has enough buffered to seek into — seeking a still-
+    // loading element restarts buffering and causes the break we're avoiding.
+    const canSeek = audio.readyState >= 2; // HAVE_CURRENT_DATA
+    if (
+      canSeek &&
+      Number.isFinite(audio.currentTime) &&
+      Math.abs(audio.currentTime - targetSec) * 1000 > DRIFT_TOLERANCE_MS
+    ) {
       try {
         audio.currentTime = targetSec;
       } catch {
-        // Seeking before metadata loads throws; the next sync will retry.
+        // Seeking before metadata loads throws; the next sync retries.
       }
     }
 
