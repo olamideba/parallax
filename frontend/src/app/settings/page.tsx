@@ -28,6 +28,9 @@ import {
   Plus,
   LogOut,
   ShieldCheck,
+  Share2,
+  Workflow,
+  Copy,
 } from 'lucide-react';
 
 interface Paper {
@@ -56,7 +59,6 @@ const toPaper = (p: Publication): Paper => ({
   state: statusToState(p.status),
 });
 
-/* ── Shared section chrome ─────────────────────────────────────────────── */
 
 function SectionCard({
   icon,
@@ -144,7 +146,6 @@ function ResolutionPill({ state }: { state: Paper['state'] }) {
   );
 }
 
-/* ── Publications section ──────────────────────────────────────────────── */
 
 function PublicationsSection() {
   const [papers, setPapers] = useState<Paper[]>([]);
@@ -160,7 +161,6 @@ function PublicationsSection() {
     }).catch(() => setLoaded(true));
   }, []);
 
-  // Poll while any paper is still resolving — same pattern as onboarding.
   useEffect(() => {
     const hasLive = papers.some((p) => p.state === 'resolving');
     if (!hasLive) return;
@@ -172,7 +172,6 @@ function PublicationsSection() {
           return fresh ? { ...p, title: fresh.title ?? p.title, state: statusToState(fresh.status), storageKey: fresh.storage_key ?? p.storageKey } : p;
         }));
       } catch {
-        // ignore transient polling errors
       }
     }, 9000);
     return () => clearInterval(t);
@@ -342,7 +341,6 @@ function PublicationsSection() {
   );
 }
 
-/* ── Lab capacity section ──────────────────────────────────────────────── */
 
 function LabCapacitySection({ profile, onSaved }: { profile: ProfessorProfile; onSaved: (p: ProfessorProfile) => void }) {
   const isMobile = useIsMobile();
@@ -523,12 +521,16 @@ function LabCapacitySection({ profile, onSaved }: { profile: ProfessorProfile; o
   );
 }
 
-/* ── Email forwarding section ──────────────────────────────────────────── */
 
 function EmailForwardingSection({ intakeEmail }: { intakeEmail: string }) {
+  const isMobile = useIsMobile();
   const [testing, setTesting] = useState(false);
   const [testSuccess, setTestSuccess] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  // Purely a UI preference — both are always active on the backend, so
+  // there's nothing to save here, just which how-to to surface.
+  const [mode, setMode] = useState<'share' | 'forward'>('share');
 
   const handleTest = async () => {
     setTesting(true);
@@ -545,16 +547,105 @@ function EmailForwardingSection({ intakeEmail }: { intakeEmail: string }) {
   };
 
   return (
-    <SectionCard icon={<Mail size={17} />} title="Email forwarding" description="Qualifying incoming cold emails must be forwarded here so debate agents can triage, index, and draft replies for your review.">
-      <div style={{ marginBottom: '20px' }}>
-        {fieldLabel('Your unique Parallax intake address')}
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input type="text" readOnly value={intakeEmail || 'Generating address...'} style={{ flex: 1, height: '40px', boxSizing: 'border-box', padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)', color: 'var(--text-strong)', outline: 'none' }} />
-          <Button variant="secondary" onClick={() => { if (intakeEmail) navigator.clipboard.writeText(intakeEmail); }} disabled={!intakeEmail}>
-            Copy
-          </Button>
-        </div>
+    <SectionCard icon={<Mail size={17} />} title="Intake address" description="Prospective-student mail reaches Parallax one of two ways — share the address directly, or quietly forward it from your usual inbox. Pick whichever fits how you work.">
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px',
+          padding: '14px 16px', borderRadius: 'var(--radius-lg)',
+          background: 'var(--periwinkle-50)', border: '1px solid var(--periwinkle-100)',
+        }}
+      >
+        <span style={{ flex: 1, minWidth: 0, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--navy-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {intakeEmail || 'Generating address...'}
+        </span>
+        <Button
+          variant="secondary"
+          size="sm"
+          leadingIcon={copied ? <Check size={14} /> : <Copy size={14} />}
+          onClick={() => {
+            if (!intakeEmail) return;
+            navigator.clipboard.writeText(intakeEmail);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+          disabled={!intakeEmail}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
       </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+        {(
+          [
+            { key: 'share' as const, icon: <Share2 size={17} />, title: 'Share it directly', copy: 'Post it on your lab page or hand it to students yourself.' },
+            { key: 'forward' as const, icon: <Workflow size={17} />, title: 'Auto-forward from your inbox', copy: 'Keep your current address; a rule quietly forwards matching mail.' },
+          ]
+        ).map((opt) => {
+          const active = mode === opt.key;
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setMode(opt.key)}
+              style={{
+                textAlign: 'left', cursor: 'pointer', borderRadius: 'var(--radius-lg)',
+                padding: '14px', display: 'flex', flexDirection: 'column', gap: '6px',
+                border: `1.5px solid ${active ? 'var(--navy-900)' : 'var(--border-subtle)'}`,
+                background: active ? 'var(--surface-card)' : 'var(--surface-sunken)',
+                boxShadow: active ? 'var(--shadow-sm)' : 'none',
+                transition: 'border-color var(--duration-fast), background var(--duration-fast)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+                <div
+                  style={{
+                    width: 28, height: 28, borderRadius: '999px', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: active ? 'var(--navy-900)' : 'var(--surface-card)',
+                    color: active ? 'var(--white)' : 'var(--text-muted)',
+                    border: active ? 'none' : '1px solid var(--border-subtle)',
+                  }}
+                >
+                  {opt.icon}
+                </div>
+                <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>
+                  {opt.title}
+                </span>
+              </div>
+              <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.45' }}>
+                {opt.copy}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      {mode === 'share' ? (
+        <div style={{ padding: '14px 16px', borderRadius: 'var(--radius-lg)', background: 'var(--status-verified-bg)', display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '20px' }}>
+          <CheckCircle size={15} style={{ color: 'var(--status-verified-ink)', flexShrink: 0, marginTop: '2px' }} />
+          <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--status-verified-ink)', lineHeight: '1.5' }}>
+            Nothing else to do — the address above is live and accepts mail right now.
+          </p>
+        </div>
+      ) : (
+        <div style={{ marginBottom: '20px' }}>
+          {fieldLabel('Setting up the forwarding rule')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>
+            <div>
+              <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--text-strong)' }}>Gmail / Google Workspace</strong>
+              <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                Settings → Filters and Blocked Addresses → Create a new filter. Match keywords like &quot;PhD student&quot; or &quot;prospective student&quot;, and forward a copy to your intake address.
+              </p>
+            </div>
+            <div>
+              <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--text-strong)' }}>Outlook / Office 365</strong>
+              <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                Rules → Add new rule. Forward messages containing academic recruitment keywords to your intake address.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div>
         {fieldLabel('Verify the pipeline')}
@@ -573,7 +664,6 @@ function EmailForwardingSection({ intakeEmail }: { intakeEmail: string }) {
   );
 }
 
-/* ── Security section ──────────────────────────────────────────────────── */
 
 function SecuritySection({ email }: { email: string }) {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -678,7 +768,6 @@ function SecuritySection({ email }: { email: string }) {
   );
 }
 
-/* ── Page ───────────────────────────────────────────────────────────────── */
 
 export default function SettingsPage() {
   const router = useRouter();

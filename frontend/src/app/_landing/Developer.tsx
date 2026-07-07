@@ -88,7 +88,6 @@ export default function Developer() {
           ))}
         </div>
 
-        {/* Flat-filled brand CTA, not a generic outline button. */}
         <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
           <Button variant="accent" leadingIcon={<Star size={15} />}>
             Star the repo

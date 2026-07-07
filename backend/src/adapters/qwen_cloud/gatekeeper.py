@@ -34,7 +34,6 @@ class QwenGatekeeper(Gatekeeper):
             GatekeeperAssessment
         )
         result = await model.ainvoke(prompt)
-        # with_structured_output returns the pydantic instance directly.
         return result if isinstance(result, GatekeeperAssessment) else GatekeeperAssessment(
             **dict(result)
         )

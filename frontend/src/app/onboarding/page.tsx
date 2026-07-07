@@ -14,16 +14,19 @@ import { Tag } from '@/components/Tag';
 import { useIsMobile } from '@/lib/useMediaQuery';
 import {
   Check,
-  CheckCircle, 
+  CheckCircle,
   AlertTriangle,
   Loader,
-  ArrowLeft, 
-  ArrowRight, 
-  Upload, 
-  X, 
+  ArrowLeft,
+  ArrowRight,
+  Upload,
+  X,
   Plus,
   Lock,
-  XCircle
+  XCircle,
+  Share2,
+  Workflow,
+  Copy,
 } from 'lucide-react';
 
 interface Paper {
@@ -45,7 +48,6 @@ const statusToState = (s: PublicationStatus): Paper['state'] => ({
   failed:       'failed',
 } as Record<PublicationStatus, Paper['state']>)[s] ?? 'failed';
 
-// ── Stepper Component ──
 interface StepperProps {
   step: number;
   steps: string[];
@@ -96,7 +98,6 @@ function Stepper({ step, steps }: StepperProps) {
   );
 }
 
-// ── Resolution status pill ──
 function ResolutionPill({ state }: { state: Paper['state'] }) {
   const configs = {
     resolving: { label: 'Resolving…', color: 'var(--status-pending-ink)', bg: 'var(--status-pending-bg)', icon: <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> },
@@ -130,7 +131,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const isMobile = useIsMobile();
 
-  const STEPS = ['Publications', 'Lab capacity', 'Email forwarding', 'Review'];
+  const STEPS = ['Publications', 'Lab capacity', 'Intake address', 'Review'];
   const [step, setStep] = useState(0);
 
   /* — Publications state — */
@@ -157,6 +158,11 @@ export default function OnboardingPage() {
   const [testingIntake, setTestingIntake] = useState(false);
   const [testIntakeSuccess, setTestIntakeSuccess] = useState(false);
   const [testIntakeError, setTestIntakeError] = useState<string | null>(null);
+  const [intakeCopied, setIntakeCopied] = useState(false);
+  // Two equally valid ways to get mail flowing — sharing the address directly
+  // is the simplest path; forwarding is for professors who'd rather keep
+  // using their existing inbox. Neither is "the setup", just a preference.
+  const [intakeMode, setIntakeMode] = useState<'share' | 'forward'>('share');
 
   const handleTestIntake = async () => {
     setTestingIntake(true);
@@ -226,7 +232,6 @@ export default function OnboardingPage() {
           doi: p.doi ?? p.url ?? '',
         })));
       }
-      // If no publications yet, start with empty list (user will add via drop zone or DOI)
     } catch (err) {
       console.warn('Failed to load onboarding info from backend:', err);
     }
@@ -237,7 +242,6 @@ export default function OnboardingPage() {
     const lines = doiText.trim().split(/\n+/).map(l => l.trim()).filter(Boolean);
     setDoiText('');
 
-    // Add optimistic entries immediately so the user sees activity
     const tempIds = lines.map((_, i) => Date.now() + i);
     const optimistic: Paper[] = lines.map((line, i) => ({
       id: tempIds[i],
@@ -275,7 +279,6 @@ export default function OnboardingPage() {
     }
   };
 
-  // PDF drop zone: upload each file immediately, add as resolving paper
   const handlePdfFiles = async (files: File[]) => {
     setDropError(null);
     for (const file of files) {
@@ -315,14 +318,12 @@ export default function OnboardingPage() {
     }
   };
 
-  // needs_upload: file picker → uploadPublicationPdf(file, id)
   const handleRetryUpload = async (paper: Paper, file: File) => {
     if (!paper.backendId) return;
     setRetryErrors(e => ({ ...e, [paper.id]: '' }));
     setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'resolving' } : p));
     try {
       await api.uploadPublicationPdf(file, paper.backendId);
-      // Polling loop will pick up the new status
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
       setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'needs_upload' as Paper['state'] } : p));
@@ -337,7 +338,6 @@ export default function OnboardingPage() {
     setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'resolving' } : p));
     try {
       await api.reingestPublication(paper.backendId);
-      // Polling loop will pick up the new status
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Retry failed';
       setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'failed' } : p));
@@ -373,7 +373,6 @@ export default function OnboardingPage() {
     }
   };
 
-  // Poll while any paper is still resolving
   useEffect(() => {
     const hasLive = papers.some(p => p.state === 'resolving');
     if (!hasLive) return;
@@ -392,13 +391,11 @@ export default function OnboardingPage() {
           };
         }));
       } catch {
-        // Silently ignore polling errors
       }
     }, 9000);
     return () => clearInterval(t);
   }, [papers]);
 
-  /* ── helper layout wrappers ── */
   const cardWrap = (children: React.ReactNode) => (
     <div
       style={{
@@ -474,7 +471,6 @@ export default function OnboardingPage() {
         {h2Title('Connect your published work')}
         {subDescription('Parallax grounds every debate in your own research. Upload your paper PDFs to add them directly — the fastest, most reliable way to index your work. You can also paste DOIs or arXiv URLs below, and the system fetches full text where open-access and prompts you to upload PDFs for anything paywalled.')}
 
-        {/* PDF drop zone — primary input */}
         <div
           style={{ border: '2px dashed var(--border-default)', borderRadius: 'var(--radius-xl)', padding: '36px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', textAlign: 'center', background: 'var(--surface-sunken)', color: 'var(--text-muted)', marginBottom: dropError ? '8px' : '24px', cursor: 'pointer', position: 'relative' }}
           onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
@@ -517,7 +513,6 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Divider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-subtle)', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase' }}>
@@ -526,7 +521,6 @@ export default function OnboardingPage() {
           <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
         </div>
 
-        {/* DOI / arXiv URL textarea — secondary input */}
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '6px' }}>
             DOIs or arXiv URLs
@@ -553,7 +547,6 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* Paper list */}
         {papers.length > 0 && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
@@ -586,7 +579,6 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                   <ResolutionPill state={p.state} />
-                  {/* needs_upload: file picker */}
                   {p.state === 'paywalled' && p.backendId && (
                     <>
                       <Button
@@ -612,7 +604,6 @@ export default function OnboardingPage() {
                       )}
                     </>
                   )}
-                  {/* failed: no file picker — reingest directly */}
                   {p.state === 'failed' && p.backendId && (
                     <>
                       <Button
@@ -649,7 +640,6 @@ export default function OnboardingPage() {
         {h2Title('Declare your lab capacity')}
         {subDescription('Agents weigh every candidate against these constraints. Capacity is a hard signal, not a guess — set it accurately and update it as slots fill.')}
 
-        {/* — Student slots — */}
         <div style={{ marginBottom: '28px' }}>
           {monoHeader('Open student slots this cycle')}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -671,7 +661,6 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* — Students already committed — */}
         <div style={{ marginBottom: '28px' }}>
           {monoHeader('Students already committed')}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -700,7 +689,6 @@ export default function OnboardingPage() {
 
         {sectionRule}
 
-        {/* — Funding — */}
         <div style={{ marginBottom: '28px' }}>
           {monoHeader('Funding capacity')}
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 14px', maxWidth: '56ch' }}>
@@ -760,7 +748,6 @@ export default function OnboardingPage() {
 
         {sectionRule}
 
-        {/* — Research areas — */}
         <div style={{ marginBottom: '28px' }}>
           {monoHeader('Projects and topics currently recruiting for')}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
@@ -790,7 +777,6 @@ export default function OnboardingPage() {
 
         {sectionRule}
 
-        {/* — Institution — */}
         <div style={{ marginBottom: '28px' }}>
           {monoHeader('Institution (optional)')}
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 14px', maxWidth: '56ch' }}>
@@ -836,7 +822,6 @@ export default function OnboardingPage() {
 
         {sectionRule}
 
-        {/* — Custom instructions — */}
         <div style={{ marginBottom: '28px' }}>
           {monoHeader('Custom instructions to the review board')}
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px', maxWidth: '56ch' }}>
@@ -859,7 +844,6 @@ export default function OnboardingPage() {
 
         {sectionRule}
 
-        {/* — Triage preferences — */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {monoHeader('Triage preferences')}
           <Checkbox
@@ -881,69 +865,116 @@ export default function OnboardingPage() {
     body = cardWrap(
       <>
         {monoHeader('Step 3 of 4')}
-        {h2Title('Configure email forwarding')}
-        {subDescription('Your qualifying incoming cold emails must be forwarded to Parallax so that debate agents can triage, index, and draft replies for your review.')}
+        {h2Title('Get outreach into Parallax')}
+        {subDescription("Every professor gets a dedicated intake address. Share it with prospective students directly, or keep using your usual inbox and quietly forward matching mail — whichever fits how you already work.")}
 
-        {/* Copyable intake address */}
-        <div style={{ marginBottom: '28px' }}>
-          <label style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-strong)', marginBottom: '8px' }}>
-            Your unique Parallax intake address
-          </label>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              readOnly
-              value={intakeEmail || 'Generating address...'}
-              style={{
-                flex: 1, height: '40px', boxSizing: 'border-box',
-                padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)',
-                border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)',
-                background: 'var(--surface-sunken)', color: 'var(--text-strong)', outline: 'none',
-              }}
-            />
-            <Button
-              variant="secondary"
-              onClick={() => {
-                if (intakeEmail) {
-                  navigator.clipboard.writeText(intakeEmail);
-                  alert('Intake email copied to clipboard!');
-                }
-              }}
-              disabled={!intakeEmail}
-            >
-              Copy
-            </Button>
-          </div>
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '28px',
+            padding: '14px 16px', borderRadius: 'var(--radius-lg)',
+            background: 'var(--periwinkle-50)', border: '1px solid var(--periwinkle-100)',
+          }}
+        >
+          <span style={{ flex: 1, minWidth: 0, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--navy-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {intakeEmail || 'Generating your address…'}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            leadingIcon={intakeCopied ? <Check size={14} /> : <Copy size={14} />}
+            onClick={() => {
+              if (!intakeEmail) return;
+              navigator.clipboard.writeText(intakeEmail);
+              setIntakeCopied(true);
+              setTimeout(() => setIntakeCopied(false), 2000);
+            }}
+            disabled={!intakeEmail}
+          >
+            {intakeCopied ? 'Copied' : 'Copy'}
+          </Button>
         </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+          {(
+            [
+              { key: 'share' as const, icon: <Share2 size={18} />, title: 'Share it directly', copy: 'Post it on your lab page or hand it to students yourself. Nothing to configure.' },
+              { key: 'forward' as const, icon: <Workflow size={18} />, title: 'Auto-forward from your inbox', copy: 'Keep your current email address. A quiet rule forwards matching mail here.' },
+            ]
+          ).map((opt) => {
+            const active = intakeMode === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setIntakeMode(opt.key)}
+                style={{
+                  textAlign: 'left', cursor: 'pointer', borderRadius: 'var(--radius-lg)',
+                  padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px',
+                  border: `1.5px solid ${active ? 'var(--navy-900)' : 'var(--border-subtle)'}`,
+                  background: active ? 'var(--surface-card)' : 'var(--surface-sunken)',
+                  boxShadow: active ? 'var(--shadow-sm)' : 'none',
+                  transition: 'border-color var(--duration-fast), background var(--duration-fast)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: 32, height: 32, borderRadius: '999px', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: active ? 'var(--navy-900)' : 'var(--surface-card)',
+                      color: active ? 'var(--white)' : 'var(--text-muted)',
+                      border: active ? 'none' : '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    {opt.icon}
+                  </div>
+                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>
+                    {opt.title}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.45' }}>
+                  {opt.copy}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        {intakeMode === 'share' ? (
+          <div style={{ padding: '16px 18px', borderRadius: 'var(--radius-lg)', background: 'var(--status-verified-bg)', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <CheckCircle size={16} style={{ color: 'var(--status-verified-ink)', flexShrink: 0, marginTop: '2px' }} />
+            <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--status-verified-ink)', lineHeight: '1.5' }}>
+              You&apos;re all set — the address above is live. Add it to your lab page, syllabus, or reply template whenever you&apos;re ready.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: '20px' }}>
+              {monoHeader('Setting up the forwarding rule')}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>
+                <div>
+                  <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--text-strong)' }}>Gmail / Google Workspace</strong>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                    Go to Settings → Filters and Blocked Addresses → Create a new filter. Set search term to look for keywords like <code>&quot;PhD student&quot;</code> or <code>&quot;prospective student&quot;</code>, and define the action to forward copy to your intake address.
+                  </p>
+                </div>
+                <div>
+                  <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--text-strong)' }}>Outlook / Office 365</strong>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                    Go to Rules → Add new rule. Define a rule that forwards messages containing academic recruitment keywords directly to your unique intake address.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
         {sectionRule}
 
-        {/* Instructions */}
-        <div style={{ marginBottom: '28px' }}>
-          {monoHeader('Setting up the forwarding rule')}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>
-            <div>
-              <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--text-strong)' }}>Gmail / Google Workspace</strong>
-              <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                Go to Settings → Filters and Blocked Addresses → Create a new filter. Set search term to look for keywords like <code>"PhD student"</code> or <code>"prospective student"</code>, and define the action to forward copy to your intake address.
-              </p>
-            </div>
-            <div>
-              <strong style={{ display: 'block', marginBottom: '4px', color: 'var(--text-strong)' }}>Outlook / Office 365</strong>
-              <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                Go to Rules → Add new rule. Define a rule that forwards messages containing academic recruitment keywords directly to your unique intake address.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {sectionRule}
-
-        {/* Test button */}
         <div>
           {monoHeader('Verify the pipeline')}
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: '1.4' }}>
-            Before setting up real forwarding in your client, you can send a synthetic test email. It will run through the complete triage, claim verification, and debate sequence, and show up in your queue.
+            Send a synthetic test email to see the full triage, claim verification, and debate sequence play out — it&apos;ll show up in your queue either way.
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
             <Button
@@ -960,7 +991,7 @@ export default function OnboardingPage() {
               </span>
             )}
             {testIntakeError && (
-              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-critical-ink)', fontWeight: 500 }}>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--text-xs)', color: 'var(--status-refuted-ink)', fontWeight: 500 }}>
                 ⚠ {testIntakeError}
               </span>
             )}
@@ -984,7 +1015,6 @@ export default function OnboardingPage() {
         {h2Title('Review your lab profile')}
         {subDescription('This is the ground truth every debate is measured against. You can update it any time from your lab profile — edits re-index and apply to subsequent outreach.')}
 
-        {/* Top stat row */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '14px', marginBottom: '16px' }}>
           {[
             { lbl: 'Publications indexed', val: indexed + ' of ' + papers.length },
@@ -1005,7 +1035,6 @@ export default function OnboardingPage() {
           ))}
         </div>
 
-        {/* Intake address */}
         <div style={{ padding: '16px 18px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', marginBottom: '16px' }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '4px' }}>
             Intake address
@@ -1015,7 +1044,6 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* Funding row */}
         <div style={{ padding: '16px 18px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', marginBottom: '16px', display: 'flex', gap: '32px' }}>
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '4px' }}>
@@ -1035,7 +1063,6 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* Research areas */}
         <div style={{ padding: '16px 18px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', marginBottom: '16px' }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: 'var(--tracking-caps)', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}>
             Recruiting for
@@ -1049,7 +1076,6 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* Needs attention */}
         {needs.length > 0 && (
           <div
             style={{ padding: '14px 18px', background: 'var(--agent-3-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--agent-3-bg)', display: 'flex', alignItems: 'flex-start', gap: '10px' }}
@@ -1071,7 +1097,6 @@ export default function OnboardingPage() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)' }}>
-      {/* Top Bar Header */}
       <header style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' }}>
         <div style={{ maxWidth: 760, margin: '0 auto', padding: isMobile ? '14px 16px' : '18px 24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
@@ -1092,12 +1117,10 @@ export default function OnboardingPage() {
         </div>
       </header>
 
-      {/* Main Content container */}
       <div style={{ flex: 1, width: '100%', maxWidth: 760, margin: '0 auto', padding: isMobile ? '28px 16px 64px' : '44px 24px 80px', boxSizing: 'border-box' }}>
         <Stepper step={step} steps={STEPS} />
         {body}
 
-        {/* Footer Navigation */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px' }}>
           {step > 0 ? (
             <Button

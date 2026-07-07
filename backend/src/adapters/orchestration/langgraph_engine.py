@@ -13,7 +13,7 @@ from langchain_core.messages.tool import ToolCall
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from uuid6 import uuid7
 
 from src.adapters.mcp.tools.publication_retriever import PublicationRetriever
@@ -642,21 +642,24 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             recruiting_topics=capacity.recruiting_topics if capacity else [],
         )
         logger.debug("⚖ Arbitrator ({}) deliberating…", persona_for(AgentRole.ARBITRATOR).name)
-        model = self._chat_model_factory(AgentRole.ARBITRATOR).with_structured_output(
-            ArbitratorRuling
-        )
-        # Qwen's structured output is occasionally flaky on a long transcript
-        # (returns a reasoning-only message that parses to None). The debate
-        # can't resolve without a ruling, so retry once before giving up.
-        result = await model.ainvoke(prompt)
-        if result is None:
-            logger.warning("⚖ Arbitrator returned no ruling — retrying once")
-            result = await model.ainvoke(prompt)
-        if result is None:
+        raw_model = self._chat_model_factory(AgentRole.ARBITRATOR)
+        structured = raw_model.with_structured_output(ArbitratorRuling)
+        # Qwen's structured output is flaky on a long transcript: it either parses
+        # to None, or emits an object missing a required field (which raises
+        # ValidationError inside ainvoke). Weaker models drift to prose entirely.
+        # Retry structured a few times, then fall back to plain JSON parsing — the
+        # debate can't resolve without a ruling, so we exhaust both before giving up.
+        ruling: ArbitratorRuling | None = None
+        for attempt in range(get_settings().DEBATE_ARBITER_ATTEMPTS):
+            ruling = await self._invoke_arbitrator(structured, prompt)
+            if ruling is not None:
+                break
+            logger.warning("⚖ Arbitrator produced no usable ruling (attempt {})", attempt + 1)
+        if ruling is None:
+            logger.warning("⚖ Structured output exhausted — falling back to raw JSON")
+            ruling = await self._arbitrate_json_fallback(raw_model, prompt)
+        if ruling is None:
             raise DebateError("Arbitrator returned no structured ruling")
-        ruling = (
-            result if isinstance(result, ArbitratorRuling) else ArbitratorRuling(**dict(result))
-        )
         logger.info(
             '⚖ Arbitrator rules {} — "{}"',
             ruling.label.value.upper(),
@@ -675,6 +678,54 @@ class LangGraphNegotiationEngine(NegotiationEngine):
             drafted_reply=ruling.drafted_reply,
         )
         return {"turns": [closing_turn], "decision": decision}
+
+    @staticmethod
+    async def _invoke_arbitrator(model: Any, prompt: str) -> ArbitratorRuling | None:
+        """One structured-output attempt, tolerant of Qwen's two flaky modes:
+        a None parse, or an object missing `label` that raises ValidationError."""
+        try:
+            result = await model.ainvoke(prompt)
+        except ValidationError as exc:
+            logger.warning("⚖ Arbitrator ruling failed validation: {}", exc)
+            return None
+        if result is None:
+            return None
+        return (
+            result if isinstance(result, ArbitratorRuling) else ArbitratorRuling(**dict(result))
+        )
+
+    @staticmethod
+    async def _arbitrate_json_fallback(model: Any, prompt: str) -> ArbitratorRuling | None:
+        """Last resort when `.with_structured_output` won't emit a valid object:
+        ask the raw model for a plain JSON blob and parse it leniently. Weaker
+        Qwen snapshots drift to prose under structured output but will produce
+        clean JSON when asked directly — same tactic the single-agent baseline uses."""
+        json_prompt = (
+            prompt
+            + '\n\nRespond with ONLY a JSON object, no prose, no code fence:\n'
+            + '{"label": "invite|request_more_info|decline", "rationale": "...", '
+            + '"drafted_reply": "..."}'
+        )
+        try:
+            response = await model.ainvoke(json_prompt)
+        except Exception as exc:  # noqa: BLE001 — fallback must never raise past here
+            logger.warning("⚖ JSON-fallback call failed: {}", exc)
+            return None
+        text = str(response.content).strip()
+        start, end = text.find("{"), text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            logger.warning("⚖ JSON-fallback produced no JSON object")
+            return None
+        try:
+            data = json.loads(text[start : end + 1])
+            return ArbitratorRuling(
+                label=DecisionLabel(str(data["label"]).strip().lower()),
+                rationale=str(data.get("rationale", "")),
+                drafted_reply=str(data.get("drafted_reply", "")),
+            )
+        except (json.JSONDecodeError, KeyError, ValueError, ValidationError) as exc:
+            logger.warning("⚖ JSON-fallback parse failed: {}", exc)
+            return None
 
 
 def _build_trace(
