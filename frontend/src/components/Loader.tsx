@@ -29,7 +29,6 @@ export function Loader({
         ...style,
       }}
     >
-      {/* Plain <img> (not next/image) so the GIF animates without optimization stripping frames. */}
       <img
         src="/loading.gif"
         alt={label ?? 'Loading'}

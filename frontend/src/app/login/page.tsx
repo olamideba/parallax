@@ -65,7 +65,6 @@ export default function LoginPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh', width: '100%' }}>
-      {/* Left Column: Navy Duality Brand Panel */}
       <div
         style={{
           flex: isMobile ? 'none' : 1,
@@ -116,7 +115,6 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right Column: Clean Ground Form Panel */}
       <div
         style={{
           flex: 1,
@@ -129,7 +127,6 @@ export default function LoginPage() {
         }}
       >
         <div style={{ width: '100%', maxWidth: '400px' }}>
-          {/* Header */}
           <div style={{ marginBottom: '32px' }}>
             <span
               style={{
@@ -162,7 +159,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {error && (
               <div
@@ -218,7 +214,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Footer Navigation */}
           <div
             style={{
               marginTop: '32px',

@@ -58,7 +58,6 @@ export function isSpeaking(beat: Beat, playheadMs: number): boolean {
   return playheadMs >= beat.startMs && playheadMs < beat.endMs;
 }
 
-// ── Evidence ledger ─────────────────────────────────────────────────────────
 export type ReceiptStatus = 'verified' | 'refuted' | 'open';
 
 export interface LedgerEntry {

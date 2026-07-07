@@ -45,7 +45,6 @@ export default function ForgotPasswordPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh', width: '100%' }}>
-      {/* Left Column: Navy Duality Brand Panel */}
       <div
         style={{
           flex: isMobile ? 'none' : 1,
@@ -81,7 +80,6 @@ export default function ForgotPasswordPage() {
         </div>
       </div>
 
-      {/* Right Column: Clean Ground Form Panel */}
       <div
         style={{
           flex: 1,

@@ -39,7 +39,6 @@ from src.domain.models.professor import (
 )
 from src.domain.models.society import DebateTrace, DebateTurn
 
-# --- Outreach mapping ---
 
 def _deserialize_attachments(raw: str) -> list[Attachment]:
     """Parse the JSON attachment column, tolerating legacy plain-string keys
@@ -128,7 +127,6 @@ def _outreach_to_record(o: Outreach) -> OutreachRecord:
     )
 
 
-# --- Professor mapping ---
 
 def _record_to_professor(r: ProfessorRecord, pubs: list[PublicationRecord]) -> Professor:
     return Professor(
@@ -168,7 +166,6 @@ def _record_to_publication(p: PublicationRecord) -> Publication:
     )
 
 
-# --- DebateTrace mapping ---
 
 def _record_to_trace(r: DebateTraceRecord) -> DebateTrace:
     return DebateTrace(
@@ -199,7 +196,6 @@ def _trace_to_record(t: DebateTrace) -> DebateTraceRecord:
     )
 
 
-# --- Repository implementations ---
 
 class SqlOutreachRepository(OutreachRepository):
     def __init__(self, session: AsyncSession) -> None:

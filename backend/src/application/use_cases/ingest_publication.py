@@ -83,7 +83,6 @@ class IngestPublicationUseCase:
 
         return await self._finalize(pub, PublicationStatus.INDEXED, indexed=True)
 
-    # --- source resolution ---
 
     async def _resolve_text(self, pub: Publication) -> str:
         if pub.storage_key:
@@ -115,7 +114,6 @@ class IngestPublicationUseCase:
 
         raise IngestionError("Publication has no storage_key, url, or doi to ingest")
 
-    # --- indexing ---
 
     async def _index_text(self, pub: Publication, text: str) -> None:
         settings = get_settings()

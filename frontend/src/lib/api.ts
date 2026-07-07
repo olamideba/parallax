@@ -30,7 +30,6 @@ export interface Decision {
   overridden_by_professor: boolean;
 }
 
-// ── Debate trace (the replay surface) ───────────────────────────────────────
 // Mirrors backend/src/domain/models/society.py
 export type AgentRole = 'gatekeeper' | 'advocate' | 'auditor' | 'assessor' | 'arbitrator';
 

@@ -139,7 +139,6 @@ export default function HowItWorks() {
           <Card card={ARBITRATOR} wide />
         </div>
 
-        {/* Tech stack strip */}
         <div style={{ marginTop: 'var(--space-16)' }}>
           <p
             style={{

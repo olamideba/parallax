@@ -20,7 +20,6 @@ function AuthCallbackContent() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         setStatus('Credentials verified. Entering Parallax...');
-        // Clean up url queries and navigate
         setTimeout(() => {
           router.push('/onboarding');
         }, 1000);

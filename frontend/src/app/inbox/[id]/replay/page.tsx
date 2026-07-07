@@ -106,7 +106,6 @@ export default function DebateReplayPage() {
   const [isDemo, setIsDemo] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Transport state
   const [playheadMs, setPlayheadMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
@@ -264,7 +263,6 @@ export default function DebateReplayPage() {
 
   return (
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)', overflow: 'hidden' }}>
-      {/* ── Header ── */}
       <header style={hdr}>
         <div style={hdrInner}>
           <Link href={`/inbox/${id}`} style={backLink}>
@@ -285,7 +283,6 @@ export default function DebateReplayPage() {
         </div>
       </header>
 
-      {/* ── Body: stage card + rail card, gutters + centered ── */}
       <main
         style={{
           flex: 1,
@@ -370,7 +367,6 @@ export default function DebateReplayPage() {
                 entranceIndex={i}
               />
             ))}
-            {/* Seat markers in tuning mode: feet crosshair + label per seat. */}
             {tune &&
               SEAT_ORDER.map((role) => {
                 const seat = SEATS[ROLE_SEAT[role].seatKey];
@@ -385,7 +381,6 @@ export default function DebateReplayPage() {
               })}
           </div>
 
-          {/* Tuning HUD: last clicked coordinates (also copied + logged). */}
           {tune && (
             <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 600, fontFamily: 'var(--font-mono)', fontSize: 11, color: '#fff', background: 'rgba(0,0,0,0.8)', padding: '6px 10px', borderRadius: 6 }}>
               SEAT TUNER · click the room to copy coords
@@ -411,7 +406,6 @@ export default function DebateReplayPage() {
             </div>
           )}
 
-          {/* Start overlay — a proper opening beat instead of a bare caption. */}
           {atStart && (
             <div style={startOverlay}>
               <button
@@ -427,7 +421,6 @@ export default function DebateReplayPage() {
             </div>
           )}
 
-          {/* Decision lower-third at the end of the replay. */}
           {atEnd && finalTurn && (
             <div style={decisionThird}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 10, color: '#BCC4EF', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -443,7 +436,6 @@ export default function DebateReplayPage() {
           )}
         </section>
 
-        {/* ── Transport ── edge-aligned with the stage card above. */}
         <div style={{ ...transportRow, height: TRANSPORT_H }}>
           <button style={tBtn} onClick={() => seekToBeat(activeIdx - 1)} title="Previous turn (←)">
             <SkipBack size={15} />
@@ -491,9 +483,7 @@ export default function DebateReplayPage() {
         </div>
         </div>
 
-        {/* ── RAIL CARD ── participants header + evidence ledger + chat log ── */}
         <aside style={{ ...railCard, flex: '1 1 340px', maxWidth: isMobile ? undefined : 420, minHeight: isMobile ? 380 : 0 }}>
-          {/* Slack-style channel header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
             <Hash size={14} style={{ color: 'var(--text-muted)' }} />
             <span style={{ fontFamily: 'var(--font-brand)', fontSize: 11, fontWeight: 700, color: 'var(--text-strong)', letterSpacing: '0.04em' }}>
@@ -529,7 +519,6 @@ export default function DebateReplayPage() {
             </span>
           </div>
 
-          {/* Evidence ledger — its own header zone under the channel title. */}
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-sunken)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={railLabel}>EVIDENCE LEDGER</span>
@@ -561,7 +550,6 @@ export default function DebateReplayPage() {
             </div>
           </div>
 
-          {/* Slack-like chat log */}
           <div ref={logRef} style={{ flex: 1, overflowY: 'auto', padding: '8px 8px 14px', display: 'flex', flexDirection: 'column', gap: 2 }}>
             {visibleTurns.length === 0 && (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -600,7 +588,6 @@ export default function DebateReplayPage() {
   );
 }
 
-// ── Chat pieces ──────────────────────────────────────────────────────────────
 
 function RoleAvatar({ role, bg }: { role: AgentRole; bg: string }) {
   const sprite = ROLE_SEAT[role].sprite;
@@ -720,7 +707,6 @@ function Pill({ count, label, ink, bg }: { count: number; label: string; ink: st
   );
 }
 
-// ── styles ──
 const hdr: React.CSSProperties = { borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' };
 const hdrInner: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 14, padding: '12px 24px', maxWidth: 1500, margin: '0 auto' };
 const backLink: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' };

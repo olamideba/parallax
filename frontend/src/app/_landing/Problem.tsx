@@ -66,7 +66,6 @@ function Comparison({ isMobile }: { isMobile: boolean }) {
         marginTop: 'var(--space-12)',
       }}
     >
-      {/* What lands in the inbox */}
       <div style={{ ...cardBase, background: 'var(--surface-ground)', border: '1px solid var(--border-default)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <span style={{ ...mono, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
@@ -98,7 +97,6 @@ function Comparison({ isMobile }: { isMobile: boolean }) {
         </p>
       </div>
 
-      {/* What Parallax hands back */}
       <div style={{ ...cardBase, background: 'var(--navy-900)', border: '1px solid var(--navy-700)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <span style={{ ...mono, color: 'var(--text-muted-inverse)', textTransform: 'uppercase', fontWeight: 600 }}>
@@ -144,7 +142,6 @@ export default function Problem() {
             gap: 'var(--space-12)',
           }}
         >
-          {/* The problem */}
           <div>
             <Eyebrow color="var(--status-refuted-ink)">The problem</Eyebrow>
             <h2 style={h2Style}>A flood of outreach, no way to tell real from generated.</h2>
@@ -159,7 +156,6 @@ export default function Problem() {
             </p>
           </div>
 
-          {/* The solution */}
           <div>
             <Eyebrow color="var(--status-verified-ink)">The solution</Eyebrow>
             <h2 style={h2Style}>A society of agents, grounded in your own work.</h2>

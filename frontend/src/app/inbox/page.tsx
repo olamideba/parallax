@@ -86,13 +86,11 @@ export default function InboxPage() {
   const [profile, setProfile] = useState<ProfessorProfile | null>(null);
   const [displayName, setDisplayName] = useState('');
   
-  // Local storage fallback states
   const [slots, setSlots] = useState('0');
   const [committed, setCommitted] = useState('0');
   const [areas, setAreas] = useState<string[]>([]);
   const [funding, setFunding] = useState('');
 
-  // Queue states
   const [allOutreaches, setAllOutreaches] = useState<Outreach[]>([]);
   const [activeTab, setActiveTab] = useState<'pending' | 'resolved' | 'declined' | 'replied'>('pending');
   const [loadingQueue, setLoadingQueue] = useState(true);
@@ -236,7 +234,6 @@ export default function InboxPage() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)' }}>
-      {/* Top Header */}
       <header style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' }}>
         <div style={{ maxWidth: '1120px', margin: '0 auto', padding: isMobile ? '14px 16px' : '18px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
@@ -279,7 +276,6 @@ export default function InboxPage() {
         </div>
       </header>
 
-      {/* Main Container */}
       <main
         style={{
           flex: 1,
@@ -326,7 +322,6 @@ export default function InboxPage() {
             </h1>
           </div>
 
-          {/* Tabs — the active tab carries the only accent; inactive tabs sit dim */}
           <div
             style={{
               display: 'flex',
@@ -367,7 +362,6 @@ export default function InboxPage() {
             })}
           </div>
 
-          {/* Connection Error Message */}
           {apiError && (
             <div
               style={{
@@ -393,7 +387,6 @@ export default function InboxPage() {
             </div>
           )}
 
-          {/* Queue List / Empty State / Loading */}
           {loadingQueue ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
               <Loader width={140} label="Loading review queue..." />
@@ -494,7 +487,6 @@ export default function InboxPage() {
                       cursor: 'pointer',
                     }}
                   >
-                    {/* Zone 1 — identifier: checkbox, name, verdict pill */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: isMobile ? 'auto' : '260px', flexShrink: 0, minWidth: 0 }}>
                       {!isMobile && (
                         <span
@@ -552,7 +544,6 @@ export default function InboxPage() {
                       )}
                     </div>
 
-                    {/* Zone 2 — content: subject + opening snippet, one line */}
                     <span
                       style={{
                         flex: 1,
@@ -569,7 +560,6 @@ export default function InboxPage() {
                       <span style={{ color: 'var(--text-muted)' }}> — {item.body.replace(/\s+/g, ' ')}</span>
                     </span>
 
-                    {/* Zone 3 — metadata: capped tags, date, hover action */}
                     {!isMobile && (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', flexShrink: 0 }}>
                         {shownTags.map((interest, idx) => (
@@ -611,7 +601,6 @@ export default function InboxPage() {
           )}
         </div>
 
-        {/* Right Side: Lab Profile Card summary */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div
             style={{
