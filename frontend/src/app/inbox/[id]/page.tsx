@@ -70,7 +70,6 @@ export default function OutreachDetailPage() {
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
 
-  // Override Form State
   const [showOverride, setShowOverride] = useState(false);
   const [overrideLabel, setOverrideLabel] = useState<'invite' | 'request_more_info' | 'decline'>('invite');
   const [overrideRationale, setOverrideRationale] = useState('');
@@ -78,11 +77,9 @@ export default function OutreachDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Reply Composer State
   const [replyBody, setReplyBody] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
 
-  // Maintenance actions (retriage / delete stub rows)
   const [retriaging, setRetriaging] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -309,7 +306,6 @@ export default function OutreachDetailPage() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-sunken)' }}>
-      {/* Top Header */}
       <header style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '14px 16px' : '18px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
@@ -346,10 +342,8 @@ export default function OutreachDetailPage() {
         </div>
       </header>
 
-      {/* Main layout */}
       <main style={{ flex: 1, maxWidth: '1200px', width: '100%', margin: '0 auto', padding: isMobile ? '24px 16px 64px' : '32px 24px 80px', boxSizing: 'border-box' }}>
         
-        {/* Back Link & Notifications */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
             <Link href="/inbox" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--text-sm)' }}>
@@ -388,7 +382,6 @@ export default function OutreachDetailPage() {
             + email), right = the decision console (verdict + reasoning). */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: isMobile ? '20px' : '32px', alignItems: 'start' }}>
 
-          {/* LEFT PANE: source file — one continuous scroll, no internal card seams */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: isMobile ? '20px' : '28px', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ marginBottom: '14px' }}>
@@ -400,7 +393,6 @@ export default function OutreachDetailPage() {
                 </span>
               </div>
 
-              {/* Credentials cluster — degrees + country on one unified row */}
               {((profile?.credentials && profile.credentials.length > 0) || profile?.country) && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
                   {profile?.credentials?.map((cred, idx) => (
@@ -414,7 +406,6 @@ export default function OutreachDetailPage() {
                 </div>
               )}
 
-              {/* Bio details list */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {profile?.interests && profile.interests.length > 0 && (
                   <div>
@@ -437,7 +428,6 @@ export default function OutreachDetailPage() {
                 )}
               </div>
 
-              {/* Original outreach email — same scroll, whitespace does the separation */}
               <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
                   <span style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>SUBJECT</span>
@@ -450,7 +440,6 @@ export default function OutreachDetailPage() {
                 </span>
               </div>
 
-              {/* Email Content Body — plain reading text, no box or divider */}
               <div
                 style={{
                   marginTop: '16px',
@@ -464,7 +453,6 @@ export default function OutreachDetailPage() {
                 {outreach.body}
               </div>
 
-              {/* Attachments */}
               {outreach.attachment_keys && outreach.attachment_keys.length > 0 && (
                 <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <span style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>ATTACHMENTS</span>
@@ -492,13 +480,10 @@ export default function OutreachDetailPage() {
             </div>
           </div>
 
-          {/* RIGHT PANE: decision console — verdict first, reasoning under it */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-            {/* Decision Consensus & Actions */}
             <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: isMobile ? '20px' : '28px', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-              {/* Verdict block — the loudest element on the page */}
               {decision ? (
                 <div
                   style={{
@@ -538,7 +523,6 @@ export default function OutreachDetailPage() {
                 </div>
               )}
 
-              {/* Debate replay entry point — supports the verdict, secondary CTA */}
               {outreach.debate_trace_id && (
                 <Link
                   href={`/inbox/${outreach.id}/replay`}
@@ -555,7 +539,6 @@ export default function OutreachDetailPage() {
                 </Link>
               )}
 
-              {/* Rationale — chunked into scannable sections */}
               {decision?.rationale && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>DECISION RATIONALE</span>
@@ -572,7 +555,6 @@ export default function OutreachDetailPage() {
                 </div>
               )}
 
-              {/* Status-aware: Pending Triage notice */}
               {outreach.status === 'pending_triage' && (
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
@@ -585,7 +567,6 @@ export default function OutreachDetailPage() {
                 </div>
               )}
 
-              {/* Status-aware: Replied banner */}
               {outreach.status === 'replied' && (
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
@@ -600,7 +581,6 @@ export default function OutreachDetailPage() {
                 </div>
               )}
 
-              {/* Reply Composer */}
               {outreach.status !== 'pending_triage' && outreach.status !== 'rejected' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
@@ -642,7 +622,6 @@ export default function OutreachDetailPage() {
                 </div>
               )}
 
-              {/* Action buttons (Approve / Override Trigger) — hidden when replied or pending */}
               {outreach.status === 'awaiting_review' && !showOverride && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
                   {decision && (
@@ -656,12 +635,10 @@ export default function OutreachDetailPage() {
                 </div>
               )}
 
-              {/* Override Collapsible Form */}
               {showOverride && (
                 <form onSubmit={handleOverride} style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <h4 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>Specify decision override</h4>
                   
-                  {/* Label selector */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <label style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>NEW DECISION STATUS</label>
                     <select
@@ -679,7 +656,6 @@ export default function OutreachDetailPage() {
                     </select>
                   </div>
 
-                  {/* Rationale input */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <label style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>RATIONALE</label>
                     <textarea
@@ -695,7 +671,6 @@ export default function OutreachDetailPage() {
                     />
                   </div>
 
-                  {/* Draft Reply edit */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <label style={{ fontFamily: 'var(--font-display)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>REPLY DRAFT (OPTIONAL)</label>
                     <textarea
@@ -710,7 +685,6 @@ export default function OutreachDetailPage() {
                     />
                   </div>
 
-                  {/* Action buttons */}
                   <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
                     <Button variant="primary" type="submit" style={{ flex: 1, justifyContent: 'center' }} disabled={submitting}>
                       {submitting ? 'Saving...' : 'Submit Override'}
@@ -723,7 +697,6 @@ export default function OutreachDetailPage() {
               )}
             </div>
 
-            {/* Debate Claim Extraction Panel */}
             <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <Sparkles size={16} style={{ color: 'var(--navy-900)' }} />

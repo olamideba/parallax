@@ -52,7 +52,6 @@ export default function SignupPage() {
         setError(authError.message);
       } else {
         setSuccess(true);
-        // Redirect to email verification screen after a brief delay
         setTimeout(() => {
           router.push(`/verify-email?email=${encodeURIComponent(email)}`);
         }, 1500);
@@ -66,7 +65,6 @@ export default function SignupPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh', width: '100%' }}>
-      {/* Left Column: Navy Duality Brand Panel */}
       <div
         style={{
           flex: isMobile ? 'none' : 1,
@@ -117,7 +115,6 @@ export default function SignupPage() {
         </div>
       </div>
 
-      {/* Right Column: Clean Ground Form Panel */}
       <div
         style={{
           flex: 1,
@@ -130,7 +127,6 @@ export default function SignupPage() {
         }}
       >
         <div style={{ width: '100%', maxWidth: '400px' }}>
-          {/* Header */}
           <div style={{ marginBottom: '32px' }}>
             <span
               style={{
@@ -163,7 +159,6 @@ export default function SignupPage() {
             </p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {error && (
               <div
@@ -234,7 +229,6 @@ export default function SignupPage() {
             </Button>
           </form>
 
-          {/* Footer Navigation */}
           <div
             style={{
               marginTop: '32px',

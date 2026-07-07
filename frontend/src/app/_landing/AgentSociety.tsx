@@ -90,7 +90,6 @@ export default function AgentSociety() {
         margin: '0 auto',
       }}
     >
-      {/* Debate-traffic network: spokes + ring, dashed periwinkle. */}
       <div className={styles.linesLayer} aria-hidden="true">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
           {NODES.map((n, i) => (
@@ -126,7 +125,6 @@ export default function AgentSociety() {
       </div>
 
       <div className={styles.nodesLayer}>
-        {/* The inbound email under debate. */}
         <div
           className={styles.centerNode}
           style={{ left: `${CENTER.x}%`, top: `${CENTER.y}%`, width: CENTER_DISC, height: CENTER_DISC }}

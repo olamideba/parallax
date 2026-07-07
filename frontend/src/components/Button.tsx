@@ -69,7 +69,6 @@ export function Button({
 
   const [bg, setBg] = React.useState(variants[variant].background);
 
-  // Sync background state when variant changes
   React.useEffect(() => {
     setBg(variants[variant].background);
   }, [variant]);

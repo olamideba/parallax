@@ -46,7 +46,6 @@ export default function Hero({ authed = false }: { authed?: boolean }) {
           alignItems: 'center',
         }}
       >
-        {/* Copy column */}
         <div>
           <div style={{ marginBottom: 'var(--space-6)' }}>
             <Eyebrow tone="dark">{HACKATHON_LINE}</Eyebrow>
@@ -87,7 +86,6 @@ export default function Hero({ authed = false }: { authed?: boolean }) {
           </div>
         </div>
 
-        {/* The signature: five-agent society orbiting one email */}
         <div style={{ width: '100%' }}>
           <AgentSociety />
         </div>

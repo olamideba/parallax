@@ -52,7 +52,6 @@ async def _ensure_intake_email(p: ProfessorRecord, session: AsyncSession) -> Pro
     return p
 
 
-# --- Schemas ---
 
 class UpdateProfessorRequest(BaseModel):
     display_name: str | None = None
@@ -76,7 +75,6 @@ class PublicationInput(BaseModel):
     storage_key: str | None = None
 
 
-# --- Helpers ---
 
 def _professor_dict(p: ProfessorRecord) -> dict:
     return {
@@ -111,7 +109,6 @@ def _publication_dict(p: PublicationRecord) -> dict:
     }
 
 
-# --- Endpoints ---
 
 @router.get("/me", response_model=GlobalResponse[dict])
 async def get_me(
@@ -184,7 +181,6 @@ async def replace_my_publications(
     current_professor: CurrentProfessorDep,
     session: SessionDep,
 ) -> GlobalResponse:
-    # Delete existing publications for this professor
     existing = await session.exec(
         select(PublicationRecord).where(
             PublicationRecord.professor_id == current_professor.id
@@ -193,7 +189,6 @@ async def replace_my_publications(
     for pub in existing.all():
         await session.delete(pub)
 
-    # Insert the new list
     new_pubs = [
         PublicationRecord(
             id=uuid7(),
