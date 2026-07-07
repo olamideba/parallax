@@ -1,0 +1,615 @@
+{
+  "generated_at": "2026-07-07T17:36:53.722252+00:00",
+  "summary": {
+    "n": 19,
+    "baseline": {
+      "accuracy": 0.842,
+      "correct": 16,
+      "false_accepts": 2,
+      "total_tokens": 104895,
+      "total_llm_calls": 45,
+      "total_latency_s": 530.0,
+      "total_cost_usd": null
+    },
+    "society": {
+      "accuracy": 0.895,
+      "correct": 17,
+      "false_accepts": 1,
+      "total_tokens": 620795,
+      "total_llm_calls": 300,
+      "total_latency_s": 1265.5,
+      "total_cost_usd": null
+    }
+  },
+  "cases": [
+    {
+      "case_id": "mata-fab-1",
+      "professor_key": "mata",
+      "failure_mode": "fabricated_citation",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 4546,
+        "output_tokens": 1067,
+        "total_tokens": 5613,
+        "llm_calls": 2,
+        "latency_s": 28.03,
+        "cost_usd": null,
+        "rationale": "The candidate fabricated a specific paper title ('Deep Reinforcement Learning for Dexterous Robotic Manipulation') that does not exist in the professor's corpus. Furthermore, the professor's published work explicitly states she does 'NOT study reinforcement learning or robotic control,' meaning there is zero research overlap despite the candidate's claims. The combination of a fabricated citation "
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 21055,
+        "output_tokens": 1706,
+        "total_tokens": 22761,
+        "llm_calls": 12,
+        "latency_s": 55.35,
+        "cost_usd": null,
+        "rationale": "Here is the scorecard against Professor Ada's stated bar for equivariant networks and graph neural networks:\n\n- **Topical Fit (GNNs/Equivariant Networks):** Unmet. The candidate's profile is explicitly centered on reinforcement learning, robotics, and sim-to-real transfer. Professor Ada's own published work (*Spectral Bias in Graph Neural Networks*) draws a hard boundary stating she \"deliberately "
+      },
+      "error": null
+    },
+    {
+      "case_id": "mata-fab-2",
+      "professor_key": "mata",
+      "failure_mode": "fabricated_citation",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 7223,
+        "output_tokens": 956,
+        "total_tokens": 8179,
+        "llm_calls": 4,
+        "latency_s": 24.8,
+        "cost_usd": null,
+        "rationale": "The candidate fabricated a specific claim about the professor's work (a NeurIPS 2024 paper on diffusion models for protein folding) which is not present in the professor's corpus; the actual publications focus on spectral bias in GNNs and gauge-equivariant message passing on meshes. Furthermore, there is no methodological overlap between the candidate's interest in diffusion models/generative biol"
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 28752,
+        "output_tokens": 2507,
+        "total_tokens": 31259,
+        "llm_calls": 15,
+        "latency_s": 73.7,
+        "cost_usd": null,
+        "rationale": "Let's look at the scorecard against Professor Ada's actual bar. The professor requires expertise in equivariant networks and graph neural networks, specifically focusing on spectral bias, frame-averaging, and gauge-equivariant message passing on static graphs.\n\n1. **Topical Fit (Equivariant/Graph Networks):** Unmet. Elin's profile lists interests in diffusion models, protein folding, and generativ"
+      },
+      "error": null
+    },
+    {
+      "case_id": "mata-inflated-1",
+      "professor_key": "mata",
+      "failure_mode": "inflated_alignment",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 4046,
+        "output_tokens": 1904,
+        "total_tokens": 5950,
+        "llm_calls": 2,
+        "latency_s": 38.1,
+        "cost_usd": null,
+        "rationale": "The candidate's stated interests ('artificial intelligence', 'machine learning') are too generic to demonstrate overlap with the professor's specialized work in equivariant networks and graph neural networks. Furthermore, the candidate's claim to have 'read all' of the professor's work and be 'deeply aligned' is contradicted by the complete absence of specific references to the professor's actual "
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 24420,
+        "output_tokens": 1784,
+        "total_tokens": 26204,
+        "llm_calls": 14,
+        "latency_s": 58.17,
+        "cost_usd": null,
+        "rationale": "Scorecard:\n- Equivariant networks: Unmet. The candidate lists only general interests in \"artificial intelligence\" and \"machine learning\" with no specific background, projects, or coursework in equivariance or differential geometry.\n- Graph neural networks: Unmet. While the candidate expresses interest in AI, there is no evidence of engagement with the specific mathematical frameworks required (spe"
+      },
+      "error": null
+    },
+    {
+      "case_id": "mata-inflated-2",
+      "professor_key": "mata",
+      "failure_mode": "inflated_alignment",
+      "expected_label": "request_more_info",
+      "baseline": {
+        "label": "request_more_info",
+        "correct": true,
+        "false_accept": true,
+        "input_tokens": 3464,
+        "output_tokens": 1854,
+        "total_tokens": 5318,
+        "llm_calls": 2,
+        "latency_s": 35.12,
+        "cost_usd": null,
+        "rationale": "The candidate's interest in 'graph neural networks' genuinely overlaps with the professor's published work (confirmed via corpus retrieval of 'Spectral Bias in Graph Neural Networks'). There are no fabricated claims, as the candidate made no specific false assertions about the professor's history. Capacity is available (2 open slots). However, the outreach is generic and lacks specific engagement "
+      },
+      "society": {
+        "label": "request_more_info",
+        "correct": true,
+        "false_accept": true,
+        "input_tokens": 32149,
+        "output_tokens": 2181,
+        "total_tokens": 34330,
+        "llm_calls": 18,
+        "latency_s": 69.96,
+        "cost_usd": null,
+        "rationale": "Here is the scorecard against Professor Ada's bar for equivariant networks and graph neural networks:\n\n1. **Topical Interest in GNNs**: Met. Sara explicitly states an interest in graph neural networks, which aligns with Professor Ada's work on spectral bias and message passing.\n2. **Methodological Fit (Spectral Analysis/Filter Design)**: Unestablished. As Leslie and Karen rightly noted, a stated i"
+      },
+      "error": null
+    },
+    {
+      "case_id": "mata-strong-1",
+      "professor_key": "mata",
+      "failure_mode": "clean_strong_fit",
+      "expected_label": "invite",
+      "baseline": {
+        "label": "invite",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 3690,
+        "output_tokens": 1142,
+        "total_tokens": 4832,
+        "llm_calls": 2,
+        "latency_s": 25.42,
+        "cost_usd": null,
+        "rationale": "The candidate demonstrates a precise understanding of the professor's specific methodology (frame-averaging with stabilizer-selection for finite groups) and proposes a logical extension (to continuous Lie groups) that aligns with the professor's recruiting topics. All claims regarding the professor's past work (FAUST benchmark, geodesic error reduction, avoidance of group convolutions) are verifie"
+      },
+      "society": {
+        "label": "request_more_info",
+        "correct": false,
+        "false_accept": false,
+        "input_tokens": 69895,
+        "output_tokens": 3465,
+        "total_tokens": 73360,
+        "llm_calls": 29,
+        "latency_s": 120.94,
+        "cost_usd": null,
+        "rationale": "Here is the scorecard against Professor Ada's bar for equivariant and graph neural networks:\n\n1. **Topical Fit (Equivariant Networks):** Unestablished. Nadia's core claim\u2014that her thesis extends frame-averaging to continuous Lie groups\u2014is the linchpin of her fit. However, as Karen rightly pointed out, Professor Ada's published work explicitly restricts this method to finite groups due to the compu"
+      },
+      "error": null
+    },
+    {
+      "case_id": "mata-strong-2",
+      "professor_key": "mata",
+      "failure_mode": "clean_strong_fit",
+      "expected_label": "invite",
+      "baseline": {
+        "label": "invite",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 3604,
+        "output_tokens": 911,
+        "total_tokens": 4515,
+        "llm_calls": 2,
+        "latency_s": 20.86,
+        "cost_usd": null,
+        "rationale": "The candidate demonstrates a precise understanding of Dr. Mata's specific work on spectral bias and learnable high-pass filters in GNNs, which is confirmed by the professor's corpus. The claim of reproducing results on new benchmarks is a valid extension of the published work, not a fabrication. With 2 open slots declared, there is immediate capacity to engage."
+      },
+      "society": {
+        "label": "request_more_info",
+        "correct": false,
+        "false_accept": false,
+        "input_tokens": 80250,
+        "output_tokens": 3699,
+        "total_tokens": 83949,
+        "llm_calls": 33,
+        "latency_s": 121.86,
+        "cost_usd": null,
+        "rationale": "Here is the scorecard against Professor Ada's bar for equivariant networks and graph neural networks:\n\n1. **Topical Fit (GNNs/Spectral Methods):** Met. Ken's stated interests in \"graph neural networks,\" \"spectral methods,\" and \"heterophily\" align perfectly with the professor's focus on spectral bias and static graph analysis. This is a genuine thematic match based on his own profile.\n2. **Methodol"
+      },
+      "error": null
+    },
+    {
+      "case_id": "mata-weak-1",
+      "professor_key": "mata",
+      "failure_mode": "clean_weak_fit",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 4482,
+        "output_tokens": 1055,
+        "total_tokens": 5537,
+        "llm_calls": 2,
+        "latency_s": 24.57,
+        "cost_usd": null,
+        "rationale": "The candidate's research interests (LLMs, dialogue systems, chatbots) show no overlap with the professor's published work or recruiting topics (equivariant networks, graph neural networks, geometric deep learning). The corpus search confirmed the professor's lab focuses exclusively on spectral analysis of graphs and symmetry-equivariant methods, with no publications related to natural language pro"
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 17830,
+        "output_tokens": 1674,
+        "total_tokens": 19504,
+        "llm_calls": 11,
+        "latency_s": 50.82,
+        "cost_usd": null,
+        "rationale": "Let's look at the scorecard against Professor Ada's actual bar. The professor's requirements are expertise in equivariant networks and graph neural networks, specifically regarding spectral properties and geometric deep learning.\n\n- **Equivariant Networks / Geometric Deep Learning:** Unmet. The candidate's profile lists \"built dialogue chatbots\" and interests in \"large language models\" and \"dialog"
+      },
+      "error": null
+    },
+    {
+      "case_id": "mata-weak-2",
+      "professor_key": "mata",
+      "failure_mode": "clean_weak_fit",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 3989,
+        "output_tokens": 931,
+        "total_tokens": 4920,
+        "llm_calls": 2,
+        "latency_s": 23.41,
+        "cost_usd": null,
+        "rationale": "The candidate's research focus (applied object detection and sensor fusion for autonomous driving) has no overlap with the professor's published work (theoretical equivariant networks and spectral analysis of graph neural networks on static graphs/meshes). The professor's corpus explicitly states a scope that excludes robotic control and applied perception systems. There is no methodological or to"
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 14964,
+        "output_tokens": 1170,
+        "total_tokens": 16134,
+        "llm_calls": 10,
+        "latency_s": 38.61,
+        "cost_usd": null,
+        "rationale": "Let's look at the scorecard against Professor Ada's actual bar. The professor requires expertise in equivariant networks and graph neural networks, specifically within the mathematical constraints of spectral analysis on static graphs.\n\nPriya's profile lists interests in object detection, autonomous driving, and sensor fusion. She claims to work on \"real-time perception for autonomous vehicles.\" W"
+      },
+      "error": null
+    },
+    {
+      "case_id": "mata-inflated-3",
+      "professor_key": "mata",
+      "failure_mode": "inflated_alignment",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 3627,
+        "output_tokens": 1368,
+        "total_tokens": 4995,
+        "llm_calls": 2,
+        "latency_s": 29.37,
+        "cost_usd": null,
+        "rationale": "The candidate's outreach is generic, citing only broad terms ('deep learning', 'AI') without demonstrating knowledge of the professor's specific research niches (equivariant networks, graph neural networks, spectral bias). The claim of 'resonating completely' is unsupported by any specific reference to the professor's actual publications found in the corpus. Per instructions, generic outreach with"
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 20948,
+        "output_tokens": 1476,
+        "total_tokens": 22424,
+        "llm_calls": 13,
+        "latency_s": 47.93,
+        "cost_usd": null,
+        "rationale": "Let's look at the scorecard against Professor Ada's specific bar for equivariant networks and graph neural networks.\n\n**Research Fit:** Unmet. The candidate expresses a general interest in \"deep learning\" and \"AI\" and claims to \"resonate completely,\" but offers no evidence of the specific mathematical foundations required here\u2014symmetry groups, gauge equivariance, spectral bias, or differential geo"
+      },
+      "error": null
+    },
+    {
+      "case_id": "okoye-cap-1",
+      "professor_key": "okoye",
+      "failure_mode": "capacity_mismatch",
+      "expected_label": "request_more_info",
+      "baseline": {
+        "label": "request_more_info",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 3109,
+        "output_tokens": 1121,
+        "total_tokens": 4230,
+        "llm_calls": 2,
+        "latency_s": 26.15,
+        "cost_usd": null,
+        "rationale": "The candidate demonstrates a precise, verified understanding of the professor's specific methodology (domain-adversarial objectives combined with abbreviation lexicons for recall recovery in cross-hospital settings), confirming a strong research fit with no fabricated claims. However, the professor's declared capacity shows 0 open slots and a strict hold policy. Per the decision guide, a genuine f"
+      },
+      "society": {
+        "label": "request_more_info",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 20354,
+        "output_tokens": 1604,
+        "total_tokens": 21958,
+        "llm_calls": 12,
+        "latency_s": 50.1,
+        "cost_usd": null,
+        "rationale": "Let's look at the scorecard first. Against Professor Chidi's bar for clinical NLP and de-identification:\n- **Topical Fit (Clinical NLP/De-identification):** Met. Marta's thesis on cross-hospital de-identification aligns directly with the professor's focus on distribution shift and PHI protection.\n- **Methodological Fit:** Unestablished. While she claims to have \"extended\" the abbreviation-lexicon "
+      },
+      "error": null
+    },
+    {
+      "case_id": "okoye-cap-2",
+      "professor_key": "okoye",
+      "failure_mode": "capacity_mismatch",
+      "expected_label": "request_more_info",
+      "baseline": {
+        "label": "invite",
+        "correct": false,
+        "false_accept": false,
+        "input_tokens": 3422,
+        "output_tokens": 1475,
+        "total_tokens": 4897,
+        "llm_calls": 2,
+        "latency_s": 31.04,
+        "cost_usd": null,
+        "rationale": "The candidate's research interest in weak supervision for ADE extraction directly matches a specific publication in the professor's corpus ('Weak Supervision for Adverse-Drug-Event Extraction'), verifying their claim. Although the lab is at capacity (0 open slots), the candidate is fully funded by a national fellowship, which typically overrides funding-based slot restrictions. The combination of "
+      },
+      "society": {
+        "label": "request_more_info",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 71503,
+        "output_tokens": 3848,
+        "total_tokens": 75351,
+        "llm_calls": 30,
+        "latency_s": 126.81,
+        "cost_usd": null,
+        "rationale": "Here is the scorecard against Professor Chidi's bar for clinical NLP and de-identification:\n\n1. **Topical Fit (Clinical NLP/Weak Supervision):** Met. Diego's profile explicitly lists \"clinical NLP\" and \"weak supervision,\" and his credential of reproducing an ADE pipeline aligns directly with the professor's core recruiting topics. While Karen rightly notes that the *execution* of this reproduction"
+      },
+      "error": null
+    },
+    {
+      "case_id": "okoye-fab-1",
+      "professor_key": "okoye",
+      "failure_mode": "fabricated_citation",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 3454,
+        "output_tokens": 1557,
+        "total_tokens": 5011,
+        "llm_calls": 2,
+        "latency_s": 31.54,
+        "cost_usd": null,
+        "rationale": "The candidate fabricated a specific claim about the professor's work, stating Dr. Okoye published a 'JAMA 2024 paper on GPT-4 clinical diagnosis.' A search of the professor's corpus reveals no such paper; the professor's actual work focuses on de-identification and adverse drug event extraction, not diagnostic benchmarks. Additionally, there is no genuine methodological overlap between the candida"
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 18356,
+        "output_tokens": 1612,
+        "total_tokens": 19968,
+        "llm_calls": 11,
+        "latency_s": 56.34,
+        "cost_usd": null,
+        "rationale": "Let's look at the scorecard against Professor Chidi's actual bar. The professor requires a fit in clinical NLP with a specific focus on de-identification and weak supervision for extraction.\n\n1. **Topical & Methodological Fit**: Unmet. Leslie correctly identified that Lena's interests in \"diagnosis benchmarks\" and \"clinical LLMs\" do not align with the professor's work on data engineering, weak sup"
+      },
+      "error": null
+    },
+    {
+      "case_id": "okoye-inflated-1",
+      "professor_key": "okoye",
+      "failure_mode": "inflated_alignment",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 2884,
+        "output_tokens": 1178,
+        "total_tokens": 4062,
+        "llm_calls": 2,
+        "latency_s": 26.23,
+        "cost_usd": null,
+        "rationale": "The candidate's outreach is generic with no substantive evidence of research fit. While 'healthcare AI' broadly overlaps with the professor's work in 'clinical NLP' and 'de-identification', the candidate fails to mention these specific methodologies or any of the professor's actual publications (e.g., on de-identification under distribution shift). The candidate lists no credentials and makes only"
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 15317,
+        "output_tokens": 1306,
+        "total_tokens": 16623,
+        "llm_calls": 10,
+        "latency_s": 40.03,
+        "cost_usd": null,
+        "rationale": "Here is the scorecard against Professor Chidi's bar for clinical NLP and de-identification:\n\n1. **Specific Research Fit (Clinical NLP/De-ID methods):** Unmet. The candidate offers only a generic interest in \"healthcare AI\" and boilerplate admiration. There is no evidence of experience with the specific methodologies Professor Chidi employs, such as weak supervision, generative label models, or dom"
+      },
+      "error": null
+    },
+    {
+      "case_id": "okoye-weak-1",
+      "professor_key": "okoye",
+      "failure_mode": "clean_weak_fit",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 3738,
+        "output_tokens": 1626,
+        "total_tokens": 5364,
+        "llm_calls": 2,
+        "latency_s": 33.67,
+        "cost_usd": null,
+        "rationale": "The candidate's research interests (reinforcement learning, self-play, strategy games) show no overlap with the professor's published work, which focuses exclusively on clinical NLP and de-identification of protected health information. The corpus contains no records of work on game playing or reinforcement learning. Additionally, the lab is currently at capacity with no open slots."
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 14466,
+        "output_tokens": 1157,
+        "total_tokens": 15623,
+        "llm_calls": 10,
+        "latency_s": 39.21,
+        "cost_usd": null,
+        "rationale": "Let's look at the scorecard against Professor Chidi's actual bar. The professor requires a background in clinical NLP and de-identification. Grace Lin's profile lists interests strictly in \"reinforcement learning,\" \"self-play,\" and \"games,\" with her claim being \"I work on RL for game playing.\"\n\nResearch Fit: Unmet. There is no overlap between game-playing RL and clinical text processing. As Leslie"
+      },
+      "error": null
+    },
+    {
+      "case_id": "okoye-cap-3",
+      "professor_key": "okoye",
+      "failure_mode": "capacity_mismatch",
+      "expected_label": "request_more_info",
+      "baseline": {
+        "label": "request_more_info",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 2805,
+        "output_tokens": 1076,
+        "total_tokens": 3881,
+        "llm_calls": 2,
+        "latency_s": 23.54,
+        "cost_usd": null,
+        "rationale": "The candidate shows exceptional research fit, accurately citing the professor's specific findings on distribution shift, rare entity recall (date formats), and the clinical priority of recall over precision. However, the professor has 0 open slots and holds when at capacity. Per the decision guide, a genuine fit with no current slot requires requesting more information rather than inviting or decl"
+      },
+      "society": {
+        "label": "request_more_info",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 24329,
+        "output_tokens": 1757,
+        "total_tokens": 26086,
+        "llm_calls": 14,
+        "latency_s": 64.26,
+        "cost_usd": null,
+        "rationale": "Here is the scorecard against Professor Chidi's bar for clinical NLP and de-identification:\n\n1. **Topical Fit (Clinical NLP/De-ID):** Met. Yuki's stated interests align perfectly with the professor's recruiting topics.\n2. **Methodological Fit (Rare-Entity Recall):** Unestablished. Leslie correctly identified that Yuki's claim addresses a critical gap in Professor Chidi's work (distribution shift o"
+      },
+      "error": null
+    },
+    {
+      "case_id": "mata-hard-contradiction",
+      "professor_key": "mata",
+      "failure_mode": "hard_buried_contradiction",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 10335,
+        "output_tokens": 1168,
+        "total_tokens": 11503,
+        "llm_calls": 5,
+        "latency_s": 32.51,
+        "cost_usd": null,
+        "rationale": "The candidate's outreach claims the professor's work on equivariance is the 'perfect home' and 'foundation' for his research in 'equivariant reinforcement learning for robotic manipulation.' However, the professor's corpus explicitly states in the paper 'Spectral Bias in Graph Neural Networks': 'We deliberately do NOT study reinforcement learning or robotic control.' While the professor publishes "
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 19695,
+        "output_tokens": 1700,
+        "total_tokens": 21395,
+        "llm_calls": 11,
+        "latency_s": 53.02,
+        "cost_usd": null,
+        "rationale": "Let's look at the scorecard against Professor Ada's actual bar. The professor's recruiting topics are equivariant networks and graph neural networks. Victor presents an MSc in equivariant RL for manipulation, with interests in equivariant networks, reinforcement learning, and robotic control.\n\nHere is the critical distinction: While \"equivariant networks\" appears on both lists, the candidate's spe"
+      },
+      "error": null
+    },
+    {
+      "case_id": "mata-hard-false-extension",
+      "professor_key": "mata",
+      "failure_mode": "hard_false_extension",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "invite",
+        "correct": false,
+        "false_accept": true,
+        "input_tokens": 3657,
+        "output_tokens": 1214,
+        "total_tokens": 4871,
+        "llm_calls": 2,
+        "latency_s": 27.98,
+        "cost_usd": null,
+        "rationale": "The candidate demonstrates a deep understanding of the professor's specific 'frame-averaging' method for finite groups and proposes a rigorous, high-value extension to infinite continuous groups. While the professor's corpus is limited to finite groups, the candidate's claim is about their own novel extension (supported by a stated preprint), not a fabrication of the professor's past work. With 2 "
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 40511,
+        "output_tokens": 2763,
+        "total_tokens": 43274,
+        "llm_calls": 20,
+        "latency_s": 86.99,
+        "cost_usd": null,
+        "rationale": "Let's look at the scorecard against Professor Ada's bar for equivariant networks and graph neural networks.\n\n**Research Fit (Equivariant Networks):** Unmet.\nThe candidate claims to extend the professor's finite-group frame averaging to infinite continuous groups by \"averaging the full uncountable orbit.\" As Karen correctly identified and Leslie eventually conceded, this claim contradicts the funda"
+      },
+      "error": null
+    },
+    {
+      "case_id": "okoye-hard-funding",
+      "professor_key": "okoye",
+      "failure_mode": "hard_funding_override",
+      "expected_label": "request_more_info",
+      "baseline": {
+        "label": "invite",
+        "correct": false,
+        "false_accept": false,
+        "input_tokens": 6413,
+        "output_tokens": 1069,
+        "total_tokens": 7482,
+        "llm_calls": 4,
+        "latency_s": 26.83,
+        "cost_usd": null,
+        "rationale": "The candidate demonstrates a precise, verified understanding of the professor's specific work on cross-institution de-identification under distribution shift, confirming a strong research fit. Although the professor has 0 open slots, the candidate brings full external funding covering stipend and tuition, which overrides the typical financial capacity constraint. The combination of perfect topical"
+      },
+      "society": {
+        "label": "request_more_info",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 33222,
+        "output_tokens": 2160,
+        "total_tokens": 35382,
+        "llm_calls": 17,
+        "latency_s": 70.81,
+        "cost_usd": null,
+        "rationale": "Here is the scorecard against Professor Chidi's bar:\n\n**Research Fit (Clinical NLP, De-identification):**\n*   **Topical Alignment:** Met. Amara's interests in clinical NLP and de-identification map directly to the professor's core recruiting topics.\n*   **Methodological Extension:** Unestablished. As Karen rightly pointed out, Amara claims to \"extend\" the specific cross-institution work involving "
+      },
+      "error": null
+    },
+    {
+      "case_id": "okoye-hard-value-inversion",
+      "professor_key": "okoye",
+      "failure_mode": "hard_value_inversion",
+      "expected_label": "decline",
+      "baseline": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 2839,
+        "output_tokens": 896,
+        "total_tokens": 3735,
+        "llm_calls": 2,
+        "latency_s": 20.78,
+        "cost_usd": null,
+        "rationale": "The candidate's research philosophy (prioritizing precision over recall) directly contradicts the professor's published findings, which state that 'Recall on PHI, not precision, is the metric that matters clinically.' Consequently, the candidate's claim that their work 'aligns perfectly' with the professor's is factually unsupported by the corpus. Additionally, the professor currently has no open "
+      },
+      "society": {
+        "label": "decline",
+        "correct": true,
+        "false_accept": false,
+        "input_tokens": 14038,
+        "output_tokens": 1172,
+        "total_tokens": 15210,
+        "llm_calls": 10,
+        "latency_s": 40.56,
+        "cost_usd": null,
+        "rationale": "Here is the scorecard against Professor Chidi's bar:\n\n1.  **Topical Fit (Clinical NLP/De-identification):** Met. The candidate's thesis on \"precision-optimized redaction\" and stated interests clearly align with the domain.\n2.  **Methodological Alignment:** Unmet. This is the fatal flaw. The candidate explicitly claims their \"precision-first, lower-recall\" approach aligns with the lab's work. Howev"
+      },
+      "error": null
+    }
+  ]
+}
