@@ -43,6 +43,40 @@ Built for the Qwen Cloud Global AI Hackathon (Agent Society track).
 
 ## Architecture
 
+### The system
+```mermaid
+flowchart TD
+    GH["GitHub Actions<br/>CI/CD workflow"]
+    VC["Vercel<br/>Next.js frontend"]
+
+    GH -->|"SSH via Tailscale, port 22 only"| NG
+    VC -->|"HTTPS"| NG
+
+    subgraph ECS["Alibaba Cloud ECS — Docker Compose"]
+        NG["Nginx<br/>:443 reverse proxy, TLS"]
+        FA["FastAPI<br/>:8000 REST API"]
+        CE["Celery worker<br/>Async debate jobs"]
+        NG --> FA
+        NG --> CE
+    end
+
+    FA --> SB[("Supabase<br/>Postgres + pgvector")]
+    FA --> RD[("Redis Cloud<br/>Celery broker")]
+    FA --> R2[("Cloudflare R2<br/>PDF storage")]
+    FA --> QW[("Qwen Cloud<br/>LLM inference")]
+    CE --> RD
+    CE --> QW
+
+    classDef external fill:#EEEDFE,stroke:#534AB7,color:#26215C;
+    classDef compute fill:#E6F1FB,stroke:#185FA5,color:#042C53;
+    classDef service fill:#FAECE7,stroke:#993C1D,color:#4A1B0C;
+
+    class GH,VC external;
+    class ECS,NG,FA,CE compute;
+    class SB,RD,R2,QW service;
+```
+
+### The backend
 Hexagonal (ports & adapters). Dependencies point inward; the domain never imports an adapter.
 
 ```mermaid
