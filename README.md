@@ -130,7 +130,7 @@ flowchart LR
 
 | Layer | Choice |
 |---|---|
-| **Models** | Qwen via DashScope — chat, `text-embedding-v4`, `qwen3-rerank`, `qwen3-tts-flash` (all on one key) |
+| **Models** | Qwen via DashScope — `qwen-turbo-latest` (Gatekeeper), `qwen3.6-plus` (debate), `qwen3.7-plus` (Arbitrator), `text-embedding-v4`, `qwen3-rerank`, `qwen3-tts-flash` (all on one key) |
 | **Orchestration** | LangGraph `StateGraph` for the debate; Celery for async tasks |
 | **Backend** | FastAPI + Celery on Alibaba Cloud ECS; Redis broker/result backend |
 | **Data** | Postgres + pgvector + Auth on Supabase; PDFs/CVs in Cloudflare R2 |
