@@ -4,11 +4,6 @@ import React from 'react';
 import { useIsMobile } from '@/lib/useMediaQuery';
 import { displayFont, Eyebrow } from './ui';
 
-const STATS = [
-  { value: '269M+', label: 'students enrolled globally' },
-  { value: '7.3M', label: 'studying abroad' },
-];
-
 const bodyStyle: React.CSSProperties = {
   fontSize: 'var(--text-md)',
   lineHeight: 'var(--leading-relaxed)',
@@ -22,25 +17,6 @@ const h2Style: React.CSSProperties = {
   color: 'var(--text-strong)',
   margin: 'var(--space-3) 0 var(--space-4)',
 };
-
-function StatChip({ value, label }: { value: string; label: string }) {
-  return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'baseline',
-        gap: 8,
-        background: 'var(--surface-accent)',
-        border: '1px solid var(--border-accent)',
-        borderRadius: 'var(--radius-pill)',
-        padding: '8px 16px',
-      }}
-    >
-      <span style={{ ...displayFont, fontSize: 'var(--text-lg)', color: 'var(--text-accent)' }}>{value}</span>
-      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{label}</span>
-    </div>
-  );
-}
 
 /* Show, don't tell: what lands in the inbox vs what Parallax hands back. */
 function Comparison({ isMobile }: { isMobile: boolean }) {
@@ -145,14 +121,11 @@ export default function Problem() {
           <div>
             <Eyebrow color="var(--status-refuted-ink)">The problem</Eyebrow>
             <h2 style={h2Style}>A flood of outreach, no way to tell real from generated.</h2>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', margin: '0 0 var(--space-5)' }}>
-              {STATS.map((s) => (
-                <StatChip key={s.label} {...s} />
-              ))}
-            </div>
             <p style={{ ...bodyStyle, margin: 0 }}>
-              AI makes cold email look personal at zero cost — professors are left skimming
-              thousands of near-identical messages for the rare candidate who actually fits.
+              There&rsquo;s admissions software for applications, and recruiting software for
+              hiring — nothing for the flood of AI-generated outreach that lands before either
+              process starts. Professors are left skimming thousands of near-identical messages
+              by hand, for the rare candidate who actually fits.
             </p>
           </div>
 
