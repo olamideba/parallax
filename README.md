@@ -94,7 +94,7 @@ flowchart TD
         MODELS["Outreach · Professor · DebateTrace"]
     end
     subgraph adapters["adapters (concrete impls)"]
-        QWEN["qwen_cloud: Qwen chat · embeddings · rerank · Qwen3-TTS"]
+        QWEN["qwen_cloud: Qwen chat · embeddings · rerank · Qwen3-Omni TTS"]
         STORE["storage: pgvector · SQLModel repos · R2"]
         INGEST["ingestion: arXiv · DOI · PDF"]
         EMAIL["email: Resend in · Brevo out"]
@@ -121,7 +121,7 @@ flowchart LR
     T2 --> DEBATE["NegotiationEngine<br/>multi-round debate"]
     DEBATE --> ARB["Arbitrator<br/>decision + receipts"]
     ARB --> T3["parallax.intake<br/>.synthesize_debate_audio"]
-    T3 --> TTS["Qwen3-TTS per turn<br/>→ R2 (off critical path)"]
+    T3 --> TTS["Qwen3-Omni TTS per turn<br/>→ R2 (off critical path)"]
     ARB --> HITL["Awaiting review<br/>(professor HITL)"]
     HITL -->|"approve"| SEND["Outbound reply<br/>(Brevo)"]
 ```
@@ -130,7 +130,7 @@ flowchart LR
 
 | Layer | Choice |
 |---|---|
-| **Models** | Qwen via DashScope — `qwen-turbo-latest` (Gatekeeper), `qwen3.6-plus` (debate), `qwen3.7-plus` (Arbitrator), `text-embedding-v4`, `qwen3-rerank`, `qwen3-tts-flash` (all on one key) |
+| **Models** | Qwen via DashScope — `qwen-turbo-latest` (Gatekeeper), `qwen3.6-plus` (debate), `qwen3.7-plus` (Arbitrator), `text-embedding-v4`, `qwen3-rerank`, `qwen3-omni-flash` (TTS, all on one key) |
 | **Orchestration** | LangGraph `StateGraph` for the debate; Celery for async tasks |
 | **Backend** | FastAPI + Celery on Alibaba Cloud ECS; Redis broker/result backend |
 | **Data** | Postgres + pgvector + Auth on Supabase; PDFs/CVs in Cloudflare R2 |
@@ -187,7 +187,7 @@ unavailable* id (`cosyvoice-v3-flash`) failed with a generic `418 InvalidParamet
 the engine that looked exactly like a request-format bug, sending us chasing a phantom SSML
 issue for a while. A *truly nonexistent* id, by contrast, returns a clean `ModelNotFound`.
 
-The real path was a different model family entirely: **Qwen3-TTS** via
+The real path was a different model family entirely: **Qwen3-Omni** (`qwen3-omni-flash`) via
 `dashscope.MultiModalConversation.call` (plain HTTP, returns a short-lived WAV URL to
 download). Two follow-on gotchas: the base HTTP URL must be pinned to the international host
 or an intl key 401s against the domestic default, and **voice ids must be validated against
