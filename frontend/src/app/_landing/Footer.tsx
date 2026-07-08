@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { GithubIcon } from './GithubIcon';
 import { Logo, Wordmark } from '@/components/Logo';
-import { GITHUB_URL, HACKATHON_LINE } from './constants';
+import { GITHUB_URL, HACKATHON_LINE, MEDIUM_BLOG_URL } from './constants';
 
 const anchorScroll = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
   e.preventDefault();
@@ -79,6 +79,9 @@ export default function Footer() {
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <p style={colLabel}>Connect</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <a href={MEDIUM_BLOG_URL} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+                Blog
+              </a>
               <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" style={linkStyle}>
                 <GithubIcon size={16} /> GitHub
               </a>
