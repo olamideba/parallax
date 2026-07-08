@@ -7,7 +7,7 @@ import { GithubIcon } from './GithubIcon';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { useIsMobile } from '@/lib/useMediaQuery';
-import { GITHUB_URL } from './constants';
+import { GITHUB_URL, MEDIUM_BLOG_URL } from './constants';
 
 const LINKS = [
   { label: 'Demo', href: '#demo' },
@@ -90,6 +90,14 @@ export default function Nav({ authed = false }: { authed?: boolean }) {
               </a>
             ))}
             <a
+              href={MEDIUM_BLOG_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={linkStyle}
+            >
+              Blog
+            </a>
+            <a
               href={GITHUB_URL}
               target="_blank"
               rel="noopener noreferrer"
@@ -145,6 +153,14 @@ export default function Nav({ authed = false }: { authed?: boolean }) {
               {l.label}
             </a>
           ))}
+          <a
+            href={MEDIUM_BLOG_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ ...linkStyle, color: 'var(--text-body)', fontSize: 'var(--text-md)' }}
+          >
+            Blog
+          </a>
           <a
             href={GITHUB_URL}
             target="_blank"
