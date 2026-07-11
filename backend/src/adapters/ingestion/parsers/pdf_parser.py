@@ -20,7 +20,7 @@ class PyMuPdfTextExtractor(PdfTextExtractor):
         try:
             for page in doc:
                 try:
-                    text = page.get_text() or ""
+                    text = page.get_text().replace("\x00", "") or ""
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("Failed to extract text from a PDF page: {}", exc)
                     text = ""
