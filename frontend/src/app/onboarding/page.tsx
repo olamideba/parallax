@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { api, PublicationInput, PublicationStatus } from '@/lib/api';
+import { api, PublicationStatus } from '@/lib/api';
 import { Logo, Wordmark } from '@/components/Logo';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -171,36 +171,14 @@ export default function OnboardingPage() {
     try {
       await api.testIntake();
       setTestIntakeSuccess(true);
-    } catch (err: any) {
-      setTestIntakeError(err.message || 'Failed to inject test email.');
+    } catch (err: unknown) {
+      setTestIntakeError(err instanceof Error ? err.message : 'Failed to inject test email.');
     } finally {
       setTestingIntake(false);
     }
   };
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        loadData();
-      } else {
-        router.push('/login');
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        loadData();
-      } else {
-        router.push('/login');
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [router]);
-
-  const loadData = async () => {
+  async function loadData() {
     try {
       const prof = await api.getProfessorProfile();
       if (prof) {
@@ -235,7 +213,29 @@ export default function OnboardingPage() {
     } catch (err) {
       console.warn('Failed to load onboarding info from backend:', err);
     }
-  };
+  }
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        loadData();
+      } else {
+        router.push('/login');
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        loadData();
+      } else {
+        router.push('/login');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
 
   const handleResolve = async () => {
     if (!doiText.trim()) return;
@@ -300,9 +300,19 @@ export default function OnboardingPage() {
       };
       setPapers(p => [...p, placeholder]);
       try {
-        const { storage_key } = await api.uploadPublicationPdf(file);
+        const { storage_key, publication } = await api.uploadPublicationPdf(file);
         setPapers(p => p.map(pp =>
-          pp.id === newId ? { ...pp, storageKey: storage_key } : pp
+          pp.id === newId
+            ? publication
+              ? {
+                  ...pp,
+                  backendId: publication.id,
+                  storageKey: publication.storage_key,
+                  t: publication.title ?? pp.t,
+                  state: statusToState(publication.status),
+                }
+              : { ...pp, storageKey: storage_key }
+            : pp
         ));
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Upload failed';
@@ -323,7 +333,20 @@ export default function OnboardingPage() {
     setRetryErrors(e => ({ ...e, [paper.id]: '' }));
     setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'resolving' } : p));
     try {
-      await api.uploadPublicationPdf(file, paper.backendId);
+      const { publication } = await api.uploadPublicationPdf(file, paper.backendId);
+      if (publication) {
+        setPapers(ps => ps.map(p =>
+          p.id === paper.id
+            ? {
+                ...p,
+                backendId: publication.id,
+                storageKey: publication.storage_key,
+                t: publication.title ?? p.t,
+                state: statusToState(publication.status),
+              }
+            : p
+        ));
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
       setPapers(ps => ps.map(p => p.id === paper.id ? { ...p, state: 'needs_upload' as Paper['state'] } : p));

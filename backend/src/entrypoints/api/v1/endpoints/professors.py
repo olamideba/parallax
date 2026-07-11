@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
@@ -282,8 +283,9 @@ async def upload_publication_pdf(
 
     If `publication_id` is supplied, the key is attached to that publication and
     ingestion is (re)dispatched — the path for retrying a `needs_upload`/`failed`
-    item. Otherwise the caller includes the returned `storage_key` in a
-    subsequent PUT /me/publications.
+    item. Otherwise we create a new publication row immediately so the uploaded
+    PDF shows up in the professor's publication list without requiring a second
+    API call.
     """
     settings = get_settings()
     data = await file.read()
@@ -313,6 +315,20 @@ async def upload_publication_pdf(
         pub.storage_key = storage_key
         pub.status = PublicationStatus.PENDING.value
         pub.indexed = False
+        session.add(pub)
+        await session.commit()
+        await session.refresh(pub)
+        ingest_publication.delay(str(pub.id))
+        publication = _publication_dict(pub)
+    else:
+        pub = PublicationRecord(
+            id=uuid7(),
+            professor_id=current_professor.id,
+            title=Path(file.filename).stem if file.filename else None,
+            storage_key=storage_key,
+            indexed=False,
+            status=PublicationStatus.PENDING.value,
+        )
         session.add(pub)
         await session.commit()
         await session.refresh(pub)
