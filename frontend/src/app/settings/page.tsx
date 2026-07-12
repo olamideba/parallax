@@ -219,7 +219,8 @@ function PublicationsSection() {
     setRetryErrors((e) => ({ ...e, [paper.id]: '' }));
     setPapers((ps) => ps.map((p) => (p.id === paper.id ? { ...p, state: 'resolving' } : p)));
     try {
-      await api.uploadPublicationPdf(file, paper.backendId);
+      const { publication } = await api.uploadPublicationPdf(file, paper.backendId);
+      if (publication) setPapers((ps) => ps.map((p) => (p.id === paper.id ? toPaper(publication) : p)));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
       setPapers((ps) => ps.map((p) => (p.id === paper.id ? { ...p, state: 'paywalled' as const } : p)));
